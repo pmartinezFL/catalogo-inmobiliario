@@ -119,6 +119,12 @@ function mapCard(data, sourceUrl) {
     editPics.front_cover_image?.url ||
     propPics.front_cover_image?.url ||
     propPics.images?.[0] || '';
+  // sm_pics son las versiones pre-optimizadas para OG (~50-80KB vs ~500KB)
+  const coverImageOg =
+    editPics.front_cover_image?.social_media_url ||
+    propPics.front_cover_image?.social_media_url ||
+    propPics.images_social_media?.[0] ||
+    coverImage;
 
   return {
     url: edited.url || sourceUrl,
@@ -130,6 +136,7 @@ function mapCard(data, sourceUrl) {
     price,
     priceLabel,
     coverImage,
+    coverImageOg,
     attributes: {
       totalSurface: attrs.total_surface || '',
       rooms: attrs.room_amount || '',

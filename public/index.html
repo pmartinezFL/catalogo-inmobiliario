@@ -364,7 +364,7 @@ function buildCatalog(title, props) {
   const today    = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
   const cards    = props.map(card).join('\n');
   const ogParams = props.slice(0, 4)
-    .map((p, i) => `u${i}=${encodeURIComponent(p.coverImage || '')}`)
+    .map((p, i) => `u${i}=${encodeURIComponent(p.coverImageOg || p.coverImage || '')}`)
     .join('&');
   const ogImage = `https://fabulous-longma-392658.netlify.app/.netlify/functions/collage?${ogParams}`;
   const ogDesc  = `${props.length} propiedad${props.length !== 1 ? 'es' : ''} · ${company.name || 'Catálogo inmobiliario'}`;
