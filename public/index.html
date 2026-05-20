@@ -342,7 +342,7 @@ async function generate() {
   for (let i = 0; i < links.length; i++) {
     setStatus(`Obteniendo propiedad ${i + 1} de ${links.length}…`);
     try {
-      const res  = await fetch(`/.netlify/functions/property?url=${encodeURIComponent(links[i])}`);
+      const res  = await fetch(`/api/property?url=${encodeURIComponent(links[i])}`);
       const data = await res.json();
       if (data && !data.error) props.push(data);
       else errors++;
@@ -404,7 +404,7 @@ async function publish() {
   pubDiv.textContent = '';
 
   try {
-    const res  = await fetch('/.netlify/functions/publish', {
+    const res  = await fetch('/api/publish', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ html: generatedHTML, title }),
