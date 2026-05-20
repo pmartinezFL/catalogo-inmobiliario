@@ -98,10 +98,10 @@ async function getColleagueLink(propertyId, env) {
     `https://www.tokkobroker.com/api3/property/get_ficha_info_url` +
     `?properties_id=${propertyId}&is_edited=False&for_colleague=True&is_for_edit=False`;
 
-  // Tokko acepta tanto "Token" como "Bearer"; probamos Token primero
+  // Tokko usa el JWT directamente sin prefijo Bearer/Token
   const res = await fetch(apiUrl, {
     headers: {
-      Authorization:  `Token ${jwt}`,
+      Authorization:  jwt,
       'Content-Type': 'application/json',
     },
   });
