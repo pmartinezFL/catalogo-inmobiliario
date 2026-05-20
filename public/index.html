@@ -171,7 +171,7 @@ body {
   color: #991b1b;
 }
 
-#status { font-size: 13px; color: var(--g600); min-height: 18px; line-height: 1.4; }
+#status { font-size: 13px; color: var(--g600); min-height: 18px; line-height: 1.4; white-space: pre-line; }
 #status.error   { color: var(--red); }
 #status.success { color: var(--green); }
 
@@ -340,23 +340,28 @@ async function generate() {
   setStatus('');
 
   const props = [];
-  let errors = 0;
+  const errorMsgs = [];
 
   for (let i = 0; i < links.length; i++) {
     setStatus(`Obteniendo propiedad ${i + 1} de ${links.length}…`);
     try {
       const res  = await fetch(`/api/property?url=${encodeURIComponent(links[i])}`);
       const data = await res.json();
-      if (data && !data.error) props.push(data);
-      else errors++;
-    } catch { errors++; }
+      if (data && !data.error) {
+        props.push(data);
+      } else {
+        errorMsgs.push(`Link ${i + 1}: ${data?.error || 'error desconocido'}`);
+      }
+    } catch (e) {
+      errorMsgs.push(`Link ${i + 1}: ${e.message}`);
+    }
   }
 
   btn.disabled = false;
   btn.textContent = 'Generar catálogo';
 
   if (!props.length) {
-    setStatus('No se pudo obtener ninguna propiedad. Verificá los links.', 'error');
+    setStatus('No se pudo obtener ninguna propiedad:\n' + errorMsgs.join('\n'), 'error');
     return;
   }
 
