@@ -363,10 +363,7 @@ function buildCatalog(title, props) {
   const company  = props.find(p => p.company?.logo)?.company || {};
   const today    = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
   const cards    = props.map(card).join('\n');
-  const collageParams = props.slice(0, 4)
-    .map((p, i) => `u${i}=${encodeURIComponent(p.coverImage || '')}`)
-    .join('&');
-  const ogImage = `${window.location.origin}/.netlify/functions/collage?${collageParams}&t=${encodeURIComponent(title)}&c=${encodeURIComponent(props.length + (props.length !== 1 ? ' propiedades' : ' propiedad'))}`;
+  const ogImage = props[0]?.coverImage || '';
   const ogDesc  = `${props.length} propiedad${props.length !== 1 ? 'es' : ''} · ${company.name || 'Catálogo inmobiliario'}`;
 
   return `<!DOCTYPE html>
