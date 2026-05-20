@@ -451,7 +451,10 @@ function buildCatalog(title, props) {
   const company  = props.find(p => p.company?.logo)?.company || {};
   const today    = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
   const cards    = props.map(card).join('\n');
-  const ogImage = company.logo || props[0]?.coverImageOg || props[0]?.coverImage || '';
+  // Logo en fondo navy 1200x630 → WhatsApp muestra preview pequeña y prolija
+  const ogImage = company.logo
+    ? `https://wsrv.nl/?url=${encodeURIComponent(company.logo)}&w=1200&h=630&fit=contain&cbg=1a3a5c&output=jpg`
+    : (props[0]?.coverImageOg || props[0]?.coverImage || '');
   const ogDesc  = `${props.length} propiedad${props.length !== 1 ? 'es' : ''} · ${company.name || 'Catálogo inmobiliario'}`;
 
   return `<!DOCTYPE html>
