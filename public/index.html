@@ -357,9 +357,11 @@ function slug(str) {
 // ─── Catalog builder ─────────────────────────────────────────
 
 function buildCatalog(title, props) {
-  const company = props.find(p => p.company?.logo)?.company || {};
-  const today   = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
-  const cards   = props.map(card).join('\n');
+  const company  = props.find(p => p.company?.logo)?.company || {};
+  const today    = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
+  const cards    = props.map(card).join('\n');
+  const ogImage  = props[0]?.coverImage || '';
+  const ogDesc   = `${props.length} propiedad${props.length !== 1 ? 'es' : ''} · ${company.name || 'Catálogo inmobiliario'}`;
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -367,18 +369,29 @@ function buildCatalog(title, props) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${h(title)}</title>
+<meta name="description" content="${h(ogDesc)}">
+<meta property="og:type" content="website">
+<meta property="og:title" content="${h(title)}">
+<meta property="og:description" content="${h(ogDesc)}">
+<meta property="og:image" content="${h(ogImage)}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${h(title)}">
+<meta name="twitter:description" content="${h(ogDesc)}">
+<meta name="twitter:image" content="${h(ogImage)}">
 <style>${catalogCSS()}</style>
 </head>
 <body>
 
 <header class="hd">
   <div class="hd-inner">
-    ${company.logo
-      ? `<img src="${h(company.logo)}" alt="${h(company.name)}" class="hd-logo">`
-      : `<span class="hd-name">${h(company.name || 'Catálogo')}</span>`}
-    <div>
+    <div class="hd-left">
+      ${company.logo
+        ? `<img src="${h(company.logo)}" alt="${h(company.name)}" class="hd-logo">`
+        : `<span class="hd-name">${h(company.name || 'Catálogo')}</span>`}
+    </div>
+    <div class="hd-center">
       <h1 class="hd-title">${h(title)}</h1>
-      <p class="hd-date">${today}</p>
+      <p class="hd-sub">${props.length} propiedad${props.length !== 1 ? 'es' : ''} · ${today}</p>
     </div>
   </div>
 </header>
@@ -390,16 +403,26 @@ ${cards}
 </main>
 
 <footer class="ft">
-  ${h(company.name || '')} · Generado el ${today}
+  <div class="ft-inner">
+    <span>${h(company.name || '')}</span>
+    <span>Catálogo generado el ${today}</span>
+  </div>
 </footer>
 
+<script>
+// Fade-in animation on scroll
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });
+}, { threshold: 0.08 });
+document.querySelectorAll('.card').forEach(c => observer.observe(c));
+<\/script>
 </body>
 </html>`;
 }
 
 function card(p) {
-  const a    = p.attributes || {};
-  const loc  = (p.location || '').split('|').map(s => s.trim()).filter(Boolean);
+  const a     = p.attributes || {};
+  const loc   = (p.location || '').split('|').map(s => s.trim()).filter(Boolean);
   const chips = [a.totalSurface, a.rooms, a.bedrooms, a.bathrooms, a.parking]
     .filter(Boolean)
     .map(c => `<span class="chip">${h(c)}</span>`)
@@ -409,25 +432,31 @@ function card(p) {
   const statusBadge = (p.status && p.status !== 'Disponible')
     ? `<span class="s-badge s-${statusClass}">${h(p.status)}</span>` : '';
 
+  const neighborhood = loc[0] || '';
+  const rest         = loc.slice(1).join(', ');
+
   return `    <article class="card">
       <a href="${h(p.url)}" target="_blank" rel="noopener" class="card-link">
         <div class="img-wrap">
           ${p.coverImage
             ? `<img src="${h(p.coverImage)}" alt="${h(p.address)}" class="img" loading="lazy">`
             : '<div class="img-ph"></div>'}
+          <div class="img-overlay"></div>
           ${p.type ? `<span class="t-badge">${h(p.type)}</span>` : ''}
           ${statusBadge}
+          ${p.price ? `<div class="img-price">
+            ${p.priceLabel ? `<span class="img-price-lbl">${h(p.priceLabel)}</span>` : ''}
+            ${h(p.price)}
+          </div>` : ''}
         </div>
         <div class="body">
           <h2 class="addr">${h(p.title || p.address)}</h2>
-          ${loc.length ? `<p class="loc">${loc.join(' · ')}</p>` : ''}
-          ${p.price ? `
-          <p class="price">
-            ${p.priceLabel ? `<span class="price-lbl">${h(p.priceLabel)}</span>` : ''}
-            ${h(p.price)}
+          ${neighborhood ? `<p class="loc">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="flex-shrink:0;margin-top:1px"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+            ${h(neighborhood)}${rest ? `<span class="loc-rest">, ${h(rest)}</span>` : ''}
           </p>` : ''}
           ${chips ? `<div class="attrs">${chips}</div>` : ''}
-          <span class="cta">Ver ficha completa →</span>
+          <span class="cta">Ver ficha completa <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></span>
         </div>
       </a>
     </article>`;
@@ -445,60 +474,77 @@ function catalogCSS() {
   return `
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --navy:#1a3a5c;
-  --gold:#b8730a;
-  --text:#1e293b;
-  --muted:#64748b;
-  --border:#e2e8f0;
-  --bg:#f8fafc;
+  --navy:#12294a;
+  --navy2:#1e3f6b;
+  --gold:#c8860a;
+  --gold2:#f5a623;
+  --text:#1a2332;
+  --muted:#5a6a7e;
+  --border:#dde4ed;
+  --bg:#f2f5f9;
   --card:#fff;
-  --r:12px;
+  --r:14px;
 }
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;-webkit-font-smoothing:antialiased}
 
-/* Header */
-.hd{background:var(--navy);color:#fff;padding:26px 32px}
-.hd-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:18px}
-.hd-logo{height:50px;width:auto;object-fit:contain;background:#fff;border-radius:8px;padding:4px 10px}
-.hd-name{font-size:17px;font-weight:700}
-.hd-title{font-size:20px;font-weight:700;line-height:1.2}
-.hd-date{font-size:12px;opacity:.6;margin-top:3px}
+/* ── Header ── */
+.hd{background:linear-gradient(135deg,var(--navy) 0%,var(--navy2) 100%);color:#fff;padding:28px 32px 32px;position:relative;overflow:hidden}
+.hd::before{content:'';position:absolute;inset:0;background:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")}
+.hd-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:24px;position:relative}
+.hd-logo{height:54px;width:auto;max-width:160px;object-fit:contain;background:#fff;border-radius:10px;padding:6px 12px;box-shadow:0 4px 12px rgba(0,0,0,.2)}
+.hd-name{font-size:18px;font-weight:800;letter-spacing:-.01em}
+.hd-center{flex:1}
+.hd-title{font-size:24px;font-weight:800;line-height:1.2;letter-spacing:-.02em}
+.hd-sub{font-size:13px;opacity:.6;margin-top:5px;font-weight:500}
 
-/* Grid */
-.main{max-width:1200px;margin:0 auto;padding:30px 24px}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
-@media(max-width:880px){.grid{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:540px){.grid{grid-template-columns:1fr}.main{padding:18px 14px}}
+/* ── Grid ── */
+.main{max-width:1200px;margin:0 auto;padding:36px 24px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:26px}
+@media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.grid{grid-template-columns:1fr}.main{padding:20px 14px}}
 
-/* Card */
-.card{background:var(--card);border-radius:var(--r);overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.07);transition:box-shadow .2s,transform .2s}
-.card:hover{box-shadow:0 8px 24px rgba(0,0,0,.12);transform:translateY(-2px)}
+/* ── Card ── */
+.card{background:var(--card);border-radius:var(--r);overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.07);transition:box-shadow .25s,transform .25s;opacity:0;transform:translateY(16px)}
+.card.visible{opacity:1;transform:translateY(0);transition:opacity .45s ease,transform .45s ease,box-shadow .25s,transform-origin .25s}
+.card:hover{box-shadow:0 8px 30px rgba(0,0,0,.14);transform:translateY(-4px)}
 .card-link{display:flex;flex-direction:column;text-decoration:none;color:inherit;height:100%}
 
-/* Image */
-.img-wrap{position:relative;padding-top:62%;background:var(--border);overflow:hidden;flex-shrink:0}
-.img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .3s}
-.card:hover .img{transform:scale(1.04)}
-.img-ph{position:absolute;inset:0;background:linear-gradient(135deg,#e2e8f0 0%,#cbd5e1 100%)}
+/* ── Image ── */
+.img-wrap{position:relative;padding-top:65%;background:var(--border);overflow:hidden;flex-shrink:0}
+.img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .4s ease}
+.card:hover .img{transform:scale(1.05)}
+.img-ph{position:absolute;inset:0;background:linear-gradient(135deg,#dce4ef 0%,#c8d4e3 100%)}
+.img-overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(10,20,40,.78) 0%,rgba(10,20,40,.1) 45%,transparent 70%);pointer-events:none}
 
-/* Badges */
-.t-badge{position:absolute;bottom:10px;left:10px;background:rgba(26,58,92,.88);color:#fff;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:4px 8px;border-radius:4px;backdrop-filter:blur(4px)}
-.s-badge{position:absolute;top:10px;right:10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:4px 8px;border-radius:4px}
+/* ── Badges ── */
+.t-badge{position:absolute;top:12px;left:12px;background:rgba(255,255,255,.18);color:#fff;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;padding:4px 9px;border-radius:20px;backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.25)}
+.s-badge{position:absolute;top:12px;right:12px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:4px 9px;border-radius:20px}
 .s-reservado{background:rgba(245,158,11,.9);color:#fff}
-.s-vendido,.s-alquilado{background:rgba(239,68,68,.9);color:#fff}
+.s-vendido,.s-alquilado{background:rgba(220,38,38,.9);color:#fff}
 
-/* Body */
-.body{padding:15px 17px 20px;display:flex;flex-direction:column;gap:5px;flex:1}
-.addr{font-size:15px;font-weight:700;line-height:1.3;color:var(--text)}
-.loc{font-size:12.5px;color:var(--muted)}
-.price{font-size:18px;font-weight:800;color:var(--gold);margin-top:4px}
-.price-lbl{display:block;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:1px}
-.attrs{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
-.chip{font-size:12px;color:var(--muted);background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:3px 9px;white-space:nowrap}
-.cta{display:inline-block;margin-top:auto;padding-top:14px;font-size:13px;font-weight:700;color:var(--navy);border-bottom:1.5px solid currentColor;padding-bottom:1px;align-self:flex-start}
+/* ── Price on image ── */
+.img-price{position:absolute;bottom:14px;left:14px;right:14px;color:#fff;z-index:1;line-height:1.2}
+.img-price-lbl{display:block;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;opacity:.75;margin-bottom:2px}
+.img-price{font-size:20px;font-weight:800;text-shadow:0 1px 4px rgba(0,0,0,.4);letter-spacing:-.01em}
 
-/* Footer */
-.ft{text-align:center;padding:22px;font-size:12px;color:var(--muted);border-top:1px solid var(--border);margin-top:8px}
+/* ── Card body ── */
+.body{padding:16px 18px 20px;display:flex;flex-direction:column;gap:0;flex:1}
+.addr{font-size:15.5px;font-weight:700;line-height:1.3;color:var(--text);letter-spacing:-.01em}
+.loc{font-size:12.5px;color:var(--muted);margin-top:5px;display:flex;align-items:flex-start;gap:4px}
+.loc-rest{opacity:.7}
+
+/* ── Attributes ── */
+.attrs{display:flex;flex-wrap:wrap;gap:5px;margin-top:12px}
+.chip{font-size:11.5px;color:var(--muted);background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:3px 10px;white-space:nowrap;font-weight:500}
+
+/* ── CTA ── */
+.cta{display:inline-flex;align-items:center;gap:5px;margin-top:auto;padding-top:16px;font-size:13px;font-weight:700;color:var(--navy);transition:gap .2s}
+.card:hover .cta{gap:8px}
+
+/* ── Footer ── */
+.ft{border-top:1px solid var(--border);margin-top:8px;padding:20px 24px}
+.ft-inner{max-width:1200px;margin:0 auto;display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+@media(max-width:560px){.ft-inner{flex-direction:column;gap:4px;text-align:center}}
   `;
 }
 </script>
