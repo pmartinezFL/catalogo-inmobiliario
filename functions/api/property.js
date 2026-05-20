@@ -98,7 +98,10 @@ async function getColleagueLink(propertyId, env) {
     `https://www.tokkobroker.com/api3/property/get_ficha_info_url` +
     `?properties_id=${propertyId}&is_edited=False&for_colleague=True&is_for_edit=False`;
 
-  // Tokko usa JWT sin prefijo + headers que imitan la app web
+  // Tokko valida JWT + cookie sessionid (session_id está embebido en el JWT)
+  const sessionId = extractJwtClaim(jwt, 'session_id');
+  const cookieHdr = sessionId ? `sessionid=${sessionId}` : '';
+
   const res = await fetch(apiUrl, {
     headers: {
       Authorization:  jwt,
@@ -106,6 +109,7 @@ async function getColleagueLink(propertyId, env) {
       Origin:         'https://app.tokkobroker.com',
       Referer:        'https://app.tokkobroker.com/',
       'User-Agent':   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Safari/605.1.15',
+      ...(cookieHdr ? { Cookie: cookieHdr } : {}),
     },
   });
 
@@ -118,6 +122,20 @@ async function getColleagueLink(propertyId, env) {
   const data = await res.json();
   if (!data.ficha_info_url) throw new Error(`Tokko no devolvió ficha_info_url. Respuesta: ${JSON.stringify(data).slice(0, 200)}`);
   return data.ficha_info_url;
+}
+
+// ─── JWT helpers ────────────────────────────────────────────────────────────
+
+function extractJwtClaim(jwt, claim) {
+  try {
+    const payload = jwt.split('.')[1];
+    // base64url → base64 → JSON
+    const b64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const json = JSON.parse(atob(b64));
+    return json[claim] || '';
+  } catch {
+    return '';
+  }
 }
 
 // ─── Parsing ────────────────────────────────────────────────────────────────
