@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Generador de Catálogo · Ferrer Lanfranchi</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --navy:    #1a3a5c;
+  --blue:    #2563eb;
+  --sky:     #dbeafe;
+  --g50:     #f8fafc;
+  --g100:    #f1f5f9;
+  --g200:    #e2e8f0;
+  --g400:    #94a3b8;
+  --g600:    #475569;
+  --g800:    #1e293b;
+  --green:   #10b981;
+  --red:     #ef4444;
+  --r:       10px;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--g100);
+  color: var(--g800);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Header ── */
+.app-header {
+  background: var(--navy);
+  color: white;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+.app-header h1 { font-size: 17px; font-weight: 700; }
+.app-header p  { font-size: 12px; opacity: .65; margin-top: 2px; }
+
+/* ── Layout ── */
+.app-body {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  flex: 1;
+  overflow: hidden;
+}
+@media (max-width: 700px) {
+  body { overflow: auto; }
+  .app-body { grid-template-columns: 1fr; overflow: visible; }
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  background: white;
+  border-right: 1px solid var(--g200);
+  padding: 22px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+}
+
+.field label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--g600);
+  margin-bottom: 6px;
+}
+.field input,
+.field textarea {
+  width: 100%;
+  border: 1.5px solid var(--g200);
+  border-radius: 7px;
+  padding: 9px 11px;
+  font-size: 13.5px;
+  font-family: inherit;
+  color: var(--g800);
+  outline: none;
+  transition: border-color .15s;
+}
+.field input:focus,
+.field textarea:focus { border-color: var(--blue); }
+.field textarea {
+  min-height: 150px;
+  resize: vertical;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.field small { display: block; margin-top: 5px; font-size: 12px; color: var(--g400); }
+
+.btn-primary {
+  width: 100%;
+  background: var(--navy);
+  color: white;
+  border: none;
+  border-radius: 7px;
+  padding: 11px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity .15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.btn-primary:hover { opacity: .87; }
+.btn-primary:disabled { opacity: .45; cursor: not-allowed; }
+
+.btn-secondary {
+  width: 100%;
+  background: white;
+  color: var(--navy);
+  border: 1.5px solid var(--navy);
+  border-radius: 7px;
+  padding: 9px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background .15s;
+}
+.btn-secondary:hover { background: var(--sky); }
+
+#status { font-size: 13px; color: var(--g600); min-height: 18px; line-height: 1.4; }
+#status.error   { color: var(--red); }
+#status.success { color: var(--green); }
+
+.hidden { display: none !important; }
+
+/* ── Preview panel ── */
+.preview-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.preview-bar {
+  background: white;
+  border-bottom: 1px solid var(--g200);
+  padding: 10px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  gap: 10px;
+}
+.preview-bar span { font-size: 12.5px; color: var(--g400); }
+
+.badge {
+  font-size: 12px;
+  background: var(--g100);
+  border: 1px solid var(--g200);
+  border-radius: 20px;
+  padding: 3px 10px;
+  color: var(--g600);
+}
+
+.preview-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--g400);
+  font-size: 14px;
+}
+.preview-empty svg { opacity: .25; }
+
+#preview-frame {
+  flex: 1;
+  border: none;
+  width: 100%;
+}
+
+/* Spinner */
+.spin {
+  display: inline-block;
+  width: 14px; height: 14px;
+  border: 2.5px solid rgba(255,255,255,.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: rot .55s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes rot { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div>
+    <h1>Generador de Catálogo</h1>
+    <p>Ferrer Lanfranchi · Inmuebles y Desarrollos</p>
+  </div>
+</header>
+
+<div class="app-body">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+
+    <div class="field">
+      <label>Título del catálogo</label>
+      <input type="text" id="catalog-title"
+        placeholder="Ej: Propiedades · Mayo 2026">
+    </div>
+
+    <div class="field">
+      <label>Links de ficha.info</label>
+      <textarea id="links"
+        placeholder="https://ficha.info/p/abc123&#10;https://ficha.info/p/def456&#10;https://ficha.info/p/ghi789"></textarea>
+      <small>Un link por línea. Cantidad ilimitada.</small>
+    </div>
+
+    <button class="btn-primary" id="gen-btn" onclick="generate()">
+      Generar catálogo
+    </button>
+
+    <div id="status"></div>
+
+    <button class="btn-secondary hidden" id="dl-btn">
+      ⬇ Descargar HTML
+    </button>
+
+  </aside>
+
+  <!-- ── Preview ── -->
+  <div class="preview-panel">
+    <div class="preview-bar">
+      <span>Vista previa</span>
+      <span class="badge hidden" id="counter"></span>
+    </div>
+
+    <div class="preview-empty" id="empty-state">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+      </svg>
+      <p>El catálogo aparecerá aquí</p>
+    </div>
+
+    <iframe id="preview-frame" class="hidden"></iframe>
+  </div>
+
+</div>
+
+<!-- ════════════════════════════════════════════════════════════
+     JavaScript
+════════════════════════════════════════════════════════════ -->
+<script>
+let generatedHTML = '';
+
+// ─── Main generator ──────────────────────────────────────────
+
+async function generate() {
+  const raw   = document.getElementById('links').value;
+  const title = document.getElementById('catalog-title').value.trim()
+                  || 'Catálogo de Propiedades';
+
+  const links = raw
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => /^https:\/\/ficha\.info\/p\/[a-f0-9]+/.test(l));
+
+  if (!links.length) {
+    setStatus('Pegá al menos un link válido de ficha.info.', 'error');
+    return;
+  }
+
+  // Reset UI
+  const btn = document.getElementById('gen-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Generando…';
+  document.getElementById('dl-btn').classList.add('hidden');
+  document.getElementById('preview-frame').classList.add('hidden');
+  document.getElementById('empty-state').classList.remove('hidden');
+  document.getElementById('counter').classList.add('hidden');
+  setStatus('');
+
+  const props = [];
+  let errors = 0;
+
+  for (let i = 0; i < links.length; i++) {
+    setStatus(`Obteniendo propiedad ${i + 1} de ${links.length}…`);
+    try {
+      const res  = await fetch(`/.netlify/functions/property?url=${encodeURIComponent(links[i])}`);
+      const data = await res.json();
+      if (data && !data.error) props.push(data);
+      else errors++;
+    } catch { errors++; }
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Generar catálogo';
+
+  if (!props.length) {
+    setStatus('No se pudo obtener ninguna propiedad. Verificá los links.', 'error');
+    return;
+  }
+
+  // Build & show
+  generatedHTML = buildCatalog(title, props);
+
+  const frame = document.getElementById('preview-frame');
+  frame.srcdoc = generatedHTML;
+  frame.classList.remove('hidden');
+  document.getElementById('empty-state').classList.add('hidden');
+
+  const counter = document.getElementById('counter');
+  counter.classList.remove('hidden');
+  counter.textContent = `${props.length} propiedad${props.length !== 1 ? 'es' : ''}${errors ? ` · ${errors} error${errors > 1 ? 'es' : ''}` : ''}`;
+
+  const dlBtn = document.getElementById('dl-btn');
+  dlBtn.classList.remove('hidden');
+  dlBtn.onclick = () => download(title);
+
+  const msg = errors
+    ? `Listo. ${props.length} propiedades OK, ${errors} link${errors > 1 ? 's' : ''} con error.`
+    : `Listo. ${props.length} propiedad${props.length !== 1 ? 'es' : ''} generada${props.length !== 1 ? 's' : ''}.`;
+  setStatus(msg, 'success');
+}
+
+function download(title) {
+  const blob = new Blob([generatedHTML], { type: 'text/html;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `catalogo-${slug(title)}.html`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function setStatus(msg, type = '') {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className   = type;
+}
+
+function slug(str) {
+  return str.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').slice(0, 40) || 'propiedades';
+}
+
+// ─── Catalog builder ─────────────────────────────────────────
+
+function buildCatalog(title, props) {
+  const company = props.find(p => p.company?.logo)?.company || {};
+  const today   = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
+  const cards   = props.map(card).join('\n');
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${h(title)}</title>
+<style>${catalogCSS()}</style>
+</head>
+<body>
+
+<header class="hd">
+  <div class="hd-inner">
+    ${company.logo
+      ? `<img src="${h(company.logo)}" alt="${h(company.name)}" class="hd-logo">`
+      : `<span class="hd-name">${h(company.name || 'Catálogo')}</span>`}
+    <div>
+      <h1 class="hd-title">${h(title)}</h1>
+      <p class="hd-date">${today}</p>
+    </div>
+  </div>
+</header>
+
+<main class="main">
+  <div class="grid">
+${cards}
+  </div>
+</main>
+
+<footer class="ft">
+  ${h(company.name || '')} · Generado el ${today}
+</footer>
+
+</body>
+</html>`;
+}
+
+function card(p) {
+  const a    = p.attributes || {};
+  const loc  = (p.location || '').split('|').map(s => s.trim()).filter(Boolean);
+  const chips = [a.totalSurface, a.rooms, a.bedrooms, a.bathrooms, a.parking]
+    .filter(Boolean)
+    .map(c => `<span class="chip">${h(c)}</span>`)
+    .join('');
+
+  const statusClass = (p.status || '').toLowerCase().replace(/\s+/g, '-');
+  const statusBadge = (p.status && p.status !== 'Disponible')
+    ? `<span class="s-badge s-${statusClass}">${h(p.status)}</span>` : '';
+
+  return `    <article class="card">
+      <a href="${h(p.url)}" target="_blank" rel="noopener" class="card-link">
+        <div class="img-wrap">
+          ${p.coverImage
+            ? `<img src="${h(p.coverImage)}" alt="${h(p.address)}" class="img" loading="lazy">`
+            : '<div class="img-ph"></div>'}
+          ${p.type ? `<span class="t-badge">${h(p.type)}</span>` : ''}
+          ${statusBadge}
+        </div>
+        <div class="body">
+          <h2 class="addr">${h(p.title || p.address)}</h2>
+          ${loc.length ? `<p class="loc">${loc.join(' · ')}</p>` : ''}
+          ${p.price ? `
+          <p class="price">
+            ${p.priceLabel ? `<span class="price-lbl">${h(p.priceLabel)}</span>` : ''}
+            ${h(p.price)}
+          </p>` : ''}
+          ${chips ? `<div class="attrs">${chips}</div>` : ''}
+          <span class="cta">Ver ficha completa →</span>
+        </div>
+      </a>
+    </article>`;
+}
+
+function h(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── Catalog CSS (inlined in the generated file) ──────────────
+
+function catalogCSS() {
+  return `
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#1a3a5c;
+  --gold:#b8730a;
+  --text:#1e293b;
+  --muted:#64748b;
+  --border:#e2e8f0;
+  --bg:#f8fafc;
+  --card:#fff;
+  --r:12px;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5}
+
+/* Header */
+.hd{background:var(--navy);color:#fff;padding:26px 32px}
+.hd-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:18px}
+.hd-logo{height:50px;width:auto;object-fit:contain;background:#fff;border-radius:8px;padding:4px 10px}
+.hd-name{font-size:17px;font-weight:700}
+.hd-title{font-size:20px;font-weight:700;line-height:1.2}
+.hd-date{font-size:12px;opacity:.6;margin-top:3px}
+
+/* Grid */
+.main{max-width:1200px;margin:0 auto;padding:30px 24px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+@media(max-width:880px){.grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:540px){.grid{grid-template-columns:1fr}.main{padding:18px 14px}}
+
+/* Card */
+.card{background:var(--card);border-radius:var(--r);overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.07);transition:box-shadow .2s,transform .2s}
+.card:hover{box-shadow:0 8px 24px rgba(0,0,0,.12);transform:translateY(-2px)}
+.card-link{display:flex;flex-direction:column;text-decoration:none;color:inherit;height:100%}
+
+/* Image */
+.img-wrap{position:relative;padding-top:62%;background:var(--border);overflow:hidden;flex-shrink:0}
+.img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .3s}
+.card:hover .img{transform:scale(1.04)}
+.img-ph{position:absolute;inset:0;background:linear-gradient(135deg,#e2e8f0 0%,#cbd5e1 100%)}
+
+/* Badges */
+.t-badge{position:absolute;bottom:10px;left:10px;background:rgba(26,58,92,.88);color:#fff;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:4px 8px;border-radius:4px;backdrop-filter:blur(4px)}
+.s-badge{position:absolute;top:10px;right:10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:4px 8px;border-radius:4px}
+.s-reservado{background:rgba(245,158,11,.9);color:#fff}
+.s-vendido,.s-alquilado{background:rgba(239,68,68,.9);color:#fff}
+
+/* Body */
+.body{padding:15px 17px 20px;display:flex;flex-direction:column;gap:5px;flex:1}
+.addr{font-size:15px;font-weight:700;line-height:1.3;color:var(--text)}
+.loc{font-size:12.5px;color:var(--muted)}
+.price{font-size:18px;font-weight:800;color:var(--gold);margin-top:4px}
+.price-lbl{display:block;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:1px}
+.attrs{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+.chip{font-size:12px;color:var(--muted);background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:3px 9px;white-space:nowrap}
+.cta{display:inline-block;margin-top:auto;padding-top:14px;font-size:13px;font-weight:700;color:var(--navy);border-bottom:1.5px solid currentColor;padding-bottom:1px;align-self:flex-start}
+
+/* Footer */
+.ft{text-align:center;padding:22px;font-size:12px;color:var(--muted);border-top:1px solid var(--border);margin-top:8px}
+  `;
+}
+</script>
+
+</body>
+</html>
