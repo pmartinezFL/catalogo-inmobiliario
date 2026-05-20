@@ -345,15 +345,21 @@ async function generate() {
   for (let i = 0; i < links.length; i++) {
     setStatus(`Obteniendo propiedad ${i + 1} de ${links.length}…`);
     try {
-      const res  = await fetch(`/api/property?url=${encodeURIComponent(links[i])}`);
-      const data = await res.json();
-      if (data && !data.error) {
-        props.push(data);
-      } else {
-        errorMsgs.push(`Link ${i + 1}: ${data?.error || 'error desconocido'}`);
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 30000); // 30s timeout por propiedad
+      try {
+        const res  = await fetch(`/api/property?url=${encodeURIComponent(links[i])}`, { signal: ctrl.signal });
+        const data = await res.json();
+        if (data && !data.error) {
+          props.push(data);
+        } else {
+          errorMsgs.push(`Link ${i + 1}: ${data?.error || 'error desconocido'}`);
+        }
+      } finally {
+        clearTimeout(timer);
       }
     } catch (e) {
-      errorMsgs.push(`Link ${i + 1}: ${e.message}`);
+      errorMsgs.push(`Link ${i + 1}: ${e.name === 'AbortError' ? 'tiempo de espera agotado (30s)' : e.message}`);
     }
   }
 
@@ -374,9 +380,10 @@ async function generate() {
   frame.classList.remove('hidden');
   document.getElementById('empty-state').classList.add('hidden');
 
-  const counter = document.getElementById('counter');
+  const errCount = errorMsgs.length;
+  const counter  = document.getElementById('counter');
   counter.classList.remove('hidden');
-  counter.textContent = `${props.length} propiedad${props.length !== 1 ? 'es' : ''}${errors ? ` · ${errors} error${errors > 1 ? 'es' : ''}` : ''}`;
+  counter.textContent = `${props.length} propiedad${props.length !== 1 ? 'es' : ''}${errCount ? ` · ${errCount} error${errCount > 1 ? 'es' : ''}` : ''}`;
 
   const dlBtn = document.getElementById('dl-btn');
   dlBtn.classList.remove('hidden');
@@ -385,8 +392,8 @@ async function generate() {
 
   document.getElementById('pub-btn').classList.remove('hidden');
 
-  const msg = errors
-    ? `Listo. ${props.length} propiedades OK, ${errors} link${errors > 1 ? 's' : ''} con error.`
+  const msg = errCount
+    ? `Listo. ${props.length} propiedades OK, ${errCount} link${errCount > 1 ? 's' : ''} con error.`
     : `Listo. ${props.length} propiedad${props.length !== 1 ? 'es' : ''} generada${props.length !== 1 ? 's' : ''}.`;
   setStatus(msg, 'success');
 }
