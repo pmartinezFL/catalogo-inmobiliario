@@ -45,12 +45,12 @@ export async function onRequest(context) {
 async function shorten(url) {
   try {
     const res = await fetch(
-      `https://tinyurl.com/api-create.php?url=${encodeURIComponent(url)}`,
+      `https://ulvis.net/api.php?url=${encodeURIComponent(url)}&private=0`,
       { signal: AbortSignal.timeout(4000) },
     );
     if (res.ok) {
       const short = (await res.text()).trim();
-      if (short.startsWith('https://tinyurl.com/')) return short;
+      if (short.startsWith('https://ulvis.net/')) return short;
     }
   } catch { /* si falla, devolvemos el link largo */ }
   return url;
