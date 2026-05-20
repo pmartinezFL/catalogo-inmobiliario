@@ -530,24 +530,13 @@ ${cards}
 </footer>
 
 <script>
-// Fade-in animation on scroll
-const observer = new IntersectionObserver(entries => {
-  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });
-}, { threshold: 0.08 });
-document.querySelectorAll('.card').forEach(c => {
-  observer.observe(c);
-  c.addEventListener('touchstart', () => c.classList.add('tap'), { passive: true });
-  c.addEventListener('touchend',   () => setTimeout(() => c.classList.remove('tap'), 320));
-  c.addEventListener('touchcancel',() => c.classList.remove('tap'));
-});
-
-// Image slideshow — each card cycles its photos independently
-document.querySelectorAll('.img-wrap').forEach((wrap, idx) => {
+// Arranca el slideshow de una card recién cuando el usuario la ve
+function startSlideshow(wrap) {
   const slides = wrap.querySelectorAll('.slide');
   if (slides.length < 2) return;
   const dots = wrap.querySelectorAll('.dot');
   let cur = 0;
-  // Stagger start so all cards don't change at the same instant
+  // 2 segundos de pausa para que el usuario vea la portada primero
   setTimeout(() => {
     setInterval(() => {
       slides[cur].classList.remove('on');
@@ -556,7 +545,26 @@ document.querySelectorAll('.img-wrap').forEach((wrap, idx) => {
       slides[cur].classList.add('on');
       dots[cur]?.classList.add('on');
     }, 3500);
-  }, idx * 600);
+  }, 2000);
+}
+
+// Fade-in al hacer scroll + disparo del slideshow al aparecer
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.classList.add('visible');
+      observer.unobserve(e.target);
+      const wrap = e.target.querySelector('.img-wrap');
+      if (wrap) startSlideshow(wrap);
+    }
+  });
+}, { threshold: 0.08 });
+
+document.querySelectorAll('.card').forEach(c => {
+  observer.observe(c);
+  c.addEventListener('touchstart', () => c.classList.add('tap'), { passive: true });
+  c.addEventListener('touchend',   () => setTimeout(() => c.classList.remove('tap'), 320));
+  c.addEventListener('touchcancel',() => c.classList.remove('tap'));
 });
 <\/script>
 </body>
