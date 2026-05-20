@@ -4,3 +4,7 @@ compatibility_date = "2025-01-01"
 
 [assets]
 directory = "./public"
+
+[[kv_namespaces]]
+binding = "CATALOGS_KV"
+id = "7fa940a0d6334301824dd56dd8966c3e"
