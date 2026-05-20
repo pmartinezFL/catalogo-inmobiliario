@@ -257,10 +257,10 @@ body {
     </div>
 
     <div class="field">
-      <label>Links de ficha.info</label>
+      <label>Links de propiedades</label>
       <textarea id="links"
-        placeholder="https://ficha.info/p/abc123&#10;https://ficha.info/p/def456&#10;https://ficha.info/p/ghi789"></textarea>
-      <small>Un link por línea. Cantidad ilimitada.</small>
+        placeholder="https://ficha.info/p/abc123&#10;http://www.ferrerlanfranchi.com.ar/p/8065850-prop&#10;https://ficha.info/p/def456"></textarea>
+      <small>Un link por línea. Aceptá links de ficha.info o del sitio web.</small>
     </div>
 
     <button class="btn-primary" id="gen-btn" onclick="generate()">
@@ -317,10 +317,13 @@ async function generate() {
   const links = raw
     .split('\n')
     .map(l => l.trim())
-    .filter(l => /^https:\/\/ficha\.info\/p\/[a-f0-9]+/.test(l));
+    .filter(l =>
+      /^https?:\/\/ficha\.info\/p\/[a-f0-9]+/.test(l) ||
+      /^https?:\/\/(www\.)?ferrerlanfranchi\.com\.ar\/p\/\d+/.test(l)
+    );
 
   if (!links.length) {
-    setStatus('Pegá al menos un link válido de ficha.info.', 'error');
+    setStatus('Pegá al menos un link válido (ficha.info o sitio web de la propiedad).', 'error');
     return;
   }
 

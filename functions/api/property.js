@@ -4,36 +4,39 @@ const CORS = {
   'Content-Type':                 'application/json',
 };
 
+const FETCH_HEADERS = {
+  'User-Agent':      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+  Accept:            'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'es-AR,es;q=0.9',
+};
+
+// ─── Accepted URL patterns ───────────────────────────────────────────────────
+// 1. http(s)://www.ferrerlanfranchi.com.ar/p/DIGITS(-anything)?
+// 2. https://ficha.info/p/HEX (para-colegas OR regular — both accepted)
+function isValidInput(url) {
+  return /^https?:\/\/(www\.)?ferrerlanfranchi\.com\.ar\/p\/\d+/.test(url) ||
+         /^https?:\/\/ficha\.info\/p\/[a-f0-9]+/.test(url);
+}
+
 export async function onRequest(context) {
-  const { request } = context;
+  const { request, env } = context;
 
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 200, headers: CORS });
   }
 
-  const url = new URL(request.url).searchParams.get('url');
+  const inputUrl = new URL(request.url).searchParams.get('url');
 
-  if (!url || !/^https:\/\/ficha\.info\/p\/[a-f0-9]+/.test(url)) {
+  if (!inputUrl || !isValidInput(inputUrl)) {
     return new Response(
-      JSON.stringify({ error: 'URL inválida. Debe ser un link de ficha.info.' }),
+      JSON.stringify({ error: 'URL inválida. Usá un link de ficha.info o del sitio web de la propiedad.' }),
       { status: 400, headers: CORS },
     );
   }
 
   try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent':      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-        Accept:            'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'es-AR,es;q=0.9',
-      },
-    });
-
-    if (!res.ok) throw new Error(`ficha.info respondió con ${res.status}`);
-
-    const html = await res.text();
-    const data = extractPropertyData(html, url);
-
+    const { html, resolvedUrl } = await resolveToColleagueHtml(inputUrl, env);
+    const data = extractPropertyData(html, resolvedUrl);
     return new Response(JSON.stringify(data), {
       headers: { ...CORS, 'Cache-Control': 'public, max-age=3600' },
     });
@@ -43,6 +46,70 @@ export async function onRequest(context) {
       { status: 500, headers: CORS },
     );
   }
+}
+
+// ─── URL resolution ──────────────────────────────────────────────────────────
+
+/**
+ * Always returns the HTML of the "para colegas" ficha.info page.
+ * Three input cases:
+ *   A) ferrerlanfranchi.com.ar/p/ID  → get colleague link from Tokko, fetch it
+ *   B) ficha.info/p/HASH (non-colegas, redirects to website) → extract ID, Tokko, fetch
+ *   C) ficha.info/p/HASH (para colegas, stays on ficha.info) → use directly
+ */
+async function resolveToColleagueHtml(inputUrl, env) {
+  // ── Case A: website URL ───────────────────────────────────────────────────
+  if (inputUrl.includes('ferrerlanfranchi.com.ar')) {
+    const id = inputUrl.match(/\/p\/(\d+)/)?.[1];
+    if (!id) throw new Error('No se pudo extraer el ID de propiedad de la URL.');
+    const fichaUrl = await getColleagueLink(id, env);
+    const res = await fetch(fichaUrl, { headers: FETCH_HEADERS });
+    if (!res.ok) throw new Error(`ficha.info respondió con ${res.status}`);
+    return { html: await res.text(), resolvedUrl: fichaUrl };
+  }
+
+  // ── Cases B & C: ficha.info URL ────────────────────────────────────────────
+  const res = await fetch(inputUrl, { headers: FETCH_HEADERS, redirect: 'follow' });
+  if (!res.ok) throw new Error(`La URL respondió con ${res.status}`);
+
+  const finalUrl = res.url;
+
+  // Case B: ficha.info redirected us to the website → need Tokko lookup
+  if (!finalUrl.includes('ficha.info')) {
+    const id = finalUrl.match(/\/p\/(\d+)/)?.[1];
+    if (!id) throw new Error('No se pudo extraer el ID de propiedad tras la redirección.');
+    const fichaUrl = await getColleagueLink(id, env);
+    const res2 = await fetch(fichaUrl, { headers: FETCH_HEADERS });
+    if (!res2.ok) throw new Error(`ficha.info respondió con ${res2.status}`);
+    return { html: await res2.text(), resolvedUrl: fichaUrl };
+  }
+
+  // Case C: already on ficha.info (para colegas) → use as-is
+  return { html: await res.text(), resolvedUrl: finalUrl };
+}
+
+// ─── Tokko API ───────────────────────────────────────────────────────────────
+
+async function getColleagueLink(propertyId, env) {
+  const jwt = env.TOKKO_JWT;
+  if (!jwt) throw new Error('TOKKO_JWT no está configurado en el servidor. Actualizalo en Cloudflare → Workers → catalogo-fl → Bindings.');
+
+  const apiUrl =
+    `https://www.tokkobroker.com/api3/property/get_ficha_info_url` +
+    `?properties_id=${propertyId}&is_edited=False&for_colleague=True&is_for_edit=False`;
+
+  const res = await fetch(apiUrl, {
+    headers: {
+      Authorization:  `Bearer ${jwt}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!res.ok) throw new Error(`Tokko respondió con ${res.status}. El JWT puede haber expirado.`);
+
+  const data = await res.json();
+  if (!data.ficha_info_url) throw new Error('Tokko no devolvió el link para colegas.');
+  return data.ficha_info_url;
 }
 
 // ─── Parsing ────────────────────────────────────────────────────────────────
