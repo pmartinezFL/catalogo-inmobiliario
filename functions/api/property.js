@@ -98,22 +98,25 @@ async function getColleagueLink(propertyId, env) {
     `https://www.tokkobroker.com/api3/property/get_ficha_info_url` +
     `?properties_id=${propertyId}&is_edited=False&for_colleague=True&is_for_edit=False`;
 
-  // Tokko usa el JWT directamente sin prefijo Bearer/Token
+  // Tokko usa JWT sin prefijo + headers que imitan la app web
   const res = await fetch(apiUrl, {
     headers: {
       Authorization:  jwt,
       'Content-Type': 'application/json',
+      Origin:         'https://app.tokkobroker.com',
+      Referer:        'https://app.tokkobroker.com/',
+      'User-Agent':   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Safari/605.1.15',
     },
   });
 
   if (!res.ok) {
     let body = '';
     try { body = await res.text(); } catch {}
-    throw new Error(`Tokko respondió ${res.status}: ${body.slice(0, 120)}`);
+    throw new Error(`Tokko respondió ${res.status}: ${body.slice(0, 200)}`);
   }
 
   const data = await res.json();
-  if (!data.ficha_info_url) throw new Error(`Tokko no devolvió ficha_info_url. Respuesta: ${JSON.stringify(data).slice(0, 120)}`);
+  if (!data.ficha_info_url) throw new Error(`Tokko no devolvió ficha_info_url. Respuesta: ${JSON.stringify(data).slice(0, 200)}`);
   return data.ficha_info_url;
 }
 
