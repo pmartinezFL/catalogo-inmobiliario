@@ -124,6 +124,35 @@ async function getColleagueLink(propertyId, env) {
   return data.ficha_info_url;
 }
 
+// ─── Image helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Escanea el JSON serializado buscando URLs de imágenes de Tokko.
+ * Filtra thumbnails (contienen "thumbnail" en la URL) y limita a 8.
+ * La coverImage va siempre primero.
+ */
+function extractTokkoImageUrls(jsonStr, coverImage) {
+  const seen  = new Set();
+  const imgs  = [];
+  // Captura URLs de static.tokkobroker.com/pictures/... (jpg/jpeg/png/webp/gif)
+  const rx = /https:\/\/static\.tokkobroker\.com\/(?:pictures|fotos)\/[^"\\]+\.(?:jpe?g|png|webp|gif)/gi;
+  let m;
+  while ((m = rx.exec(jsonStr)) !== null) {
+    const url = m[0];
+    // Excluir thumbnails y social_media (suelen tener dimensiones en la URL o "thumbnail" en el path)
+    if (/thumbnail|_thumb|\/sm\/|social_media/i.test(url)) continue;
+    if (!seen.has(url)) { seen.add(url); imgs.push(url); }
+  }
+  // Asegurar que la portada va primero
+  if (coverImage && !seen.has(coverImage)) imgs.unshift(coverImage);
+  else if (coverImage && imgs[0] !== coverImage) {
+    const idx = imgs.indexOf(coverImage);
+    if (idx > 0) imgs.splice(idx, 1);
+    imgs.unshift(coverImage);
+  }
+  return imgs.slice(0, 8);
+}
+
 // ─── JWT helpers ────────────────────────────────────────────────────────────
 
 function extractJwtClaim(jwt, claim) {
@@ -209,12 +238,22 @@ function mapCard(data, sourceUrl) {
     toUrl((propPics.images_social_media || [])[0]) ||
     coverImage;
 
-  // Full image list for slideshow (cover first, then the rest, deduped, max 8)
+  // Full image list for slideshow
+  // 1) Intentamos los campos conocidos
   const rawImgs = [
     ...(editPics.images || []),
     ...(propPics.images || []),
   ].map(toUrl).filter(Boolean);
-  const images = [...new Set([coverImage, ...rawImgs].filter(Boolean))].slice(0, 8);
+
+  let images;
+  if (rawImgs.length > 1) {
+    // Ya tenemos suficientes por el camino normal
+    images = [...new Set([coverImage, ...rawImgs].filter(Boolean))].slice(0, 8);
+  } else {
+    // 2) Fallback: escanear todo el JSON buscando URLs de imágenes de Tokko
+    //    (cubre estructuras no estándar: picture_set, media, etc.)
+    images = extractTokkoImageUrls(JSON.stringify(data), coverImage);
+  }
 
   return {
     url:        edited.url || sourceUrl,
