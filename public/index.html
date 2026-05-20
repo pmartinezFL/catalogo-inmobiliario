@@ -572,15 +572,19 @@ function card(p) {
   return `    <article class="card">
       <a href="${h(p.url)}" target="_blank" rel="noopener" class="card-link">
         <div class="img-wrap">
-          ${(p.images && p.images.length > 0)
-            ? p.images.map((src, i) =>
-                `<img src="${h(src)}" alt="${h(p.address)}" class="img slide${i === 0 ? ' on' : ''}" loading="lazy">`
-              ).join('')
-              + (p.images.length > 1
-                ? `<div class="slide-dots">${p.images.map((_, i) =>
-                    `<span class="dot${i === 0 ? ' on' : ''}"></span>`).join('')}</div>`
-                : '')
-            : '<div class="img-ph"></div>'}
+          ${(() => {
+              const imgs = (p.images && p.images.length > 0)
+                ? p.images
+                : (p.coverImage ? [p.coverImage] : []);
+              if (!imgs.length) return '<div class="img-ph"></div>';
+              return imgs.map((src, i) =>
+                  `<img src="${h(src)}" alt="${h(p.address)}" class="img slide${i === 0 ? ' on' : ''}" loading="lazy">`
+                ).join('')
+                + (imgs.length > 1
+                  ? `<div class="slide-dots">${imgs.map((_, i) =>
+                      `<span class="dot${i === 0 ? ' on' : ''}"></span>`).join('')}</div>`
+                  : '');
+            })()}
           <div class="img-overlay"></div>
           ${p.type ? `<span class="t-badge">${h(p.type)}</span>` : ''}
           ${statusBadge}

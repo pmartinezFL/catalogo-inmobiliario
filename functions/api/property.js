@@ -195,21 +195,25 @@ function mapCard(data, sourceUrl) {
 
   const propPics = prop.pictures  || {};
   const editPics = edited.pictures || {};
+
+  // Tokko puede devolver imágenes como strings o como objetos {url:"..."}
+  const toUrl = (x) => !x ? '' : typeof x === 'string' ? x : (x.url || x.src || '');
+
   const coverImage =
-    editPics.front_cover_image?.url ||
-    propPics.front_cover_image?.url ||
-    propPics.images?.[0] || '';
+    toUrl(editPics.front_cover_image?.url || editPics.front_cover_image) ||
+    toUrl(propPics.front_cover_image?.url || propPics.front_cover_image) ||
+    toUrl((propPics.images || [])[0]) || '';
   const coverImageOg =
     editPics.front_cover_image?.social_media_url ||
     propPics.front_cover_image?.social_media_url ||
-    propPics.images_social_media?.[0] ||
+    toUrl((propPics.images_social_media || [])[0]) ||
     coverImage;
 
   // Full image list for slideshow (cover first, then the rest, deduped, max 8)
   const rawImgs = [
-    ...(editPics.images  || []),
-    ...(propPics.images  || []),
-  ].filter(Boolean);
+    ...(editPics.images || []),
+    ...(propPics.images || []),
+  ].map(toUrl).filter(Boolean);
   const images = [...new Set([coverImage, ...rawImgs].filter(Boolean))].slice(0, 8);
 
   return {
