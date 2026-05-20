@@ -1,80 +1,63 @@
-// Genera un SVG collage 2×2 con las fotos de portada de las propiedades.
-// Usado como og:image — se llama desde el HTML generado con URLs absolutas.
+const Jimp = require('jimp');
 
-exports.handler = async function (event) {
-  const p = event.queryStringParameters || {};
-  const urls  = [p.u0, p.u1, p.u2, p.u3].filter(Boolean);
-  const title = p.t  || '';
-  const count = p.c  || '';
+const W = 1200, H = 630, HW = 600, HH = 315;
 
-  // Validate all URLs belong to tokkobroker CDN
-  for (const u of urls) {
-    if (!u.startsWith('https://static.tokkobroker.com/')) {
-      return { statusCode: 400, body: 'URL inválida' };
-    }
-  }
+const SLOTS = [
+  { x: 0,  y: 0   },
+  { x: HW, y: 0   },
+  { x: 0,  y: HH  },
+  { x: HW, y: HH  },
+];
 
-  // Fetch images and convert to base64 data URIs
-  const dataUris = await Promise.all(
-    urls.map(async (url) => {
-      try {
-        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-        if (!res.ok) return null;
-        const buf = await res.arrayBuffer();
-        const b64 = Buffer.from(buf).toString('base64');
-        const ct  = res.headers.get('content-type') || 'image/jpeg';
-        return `data:${ct};base64,${b64}`;
-      } catch { return null; }
-    })
-  );
-
-  const valid = dataUris.filter(Boolean);
-
-  // 2×2 grid layout
-  const slots = [
-    { x: 0,   y: 0,   w: 600, h: 315 },
-    { x: 600, y: 0,   w: 600, h: 315 },
-    { x: 0,   y: 315, w: 600, h: 315 },
-    { x: 600, y: 315, w: 600, h: 315 },
-  ];
-
-  const images = valid.map((src, i) => {
-    const { x, y, w, h } = slots[i];
-    return `<image href="${src}" x="${x}" y="${y}" width="${w}" height="${h}" preserveAspectRatio="xMidYMid slice"/>`;
-  }).join('');
-
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
-    width="1200" height="630" viewBox="0 0 1200 630">
-  <rect width="1200" height="630" fill="#12294a"/>
-  ${images}
-  <rect width="1200" height="630" fill="rgba(8,16,32,0.48)"/>
-  <line x1="600" y1="0" x2="600" y2="630" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
-  <line x1="0" y1="315" x2="1200" y2="315" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
-  ${title ? `<text x="600" y="295" text-anchor="middle"
-    font-family="-apple-system,Arial,sans-serif" font-weight="bold" font-size="52"
-    fill="white" filter="url(#shadow)">${x(title)}</text>` : ''}
-  ${count ? `<text x="600" y="358" text-anchor="middle"
-    font-family="-apple-system,Arial,sans-serif" font-size="24"
-    fill="rgba(255,255,255,0.65)">${x(count)}</text>` : ''}
-  <defs>
-    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="2" stdDeviation="6" flood-color="rgba(0,0,0,0.6)"/>
-    </filter>
-  </defs>
-</svg>`;
-
-  return {
-    statusCode: 200,
-    headers: {
-      'Content-Type': 'image/svg+xml',
-      'Cache-Control': 'public, max-age=3600',
-      'Access-Control-Allow-Origin': '*',
-    },
-    body: svg,
-  };
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Cache-Control': 'public, max-age=3600',
 };
 
-function x(str) {
-  return String(str)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+exports.handler = async function (event) {
+  const p    = event.queryStringParameters || {};
+  const urls = [p.u0, p.u1, p.u2, p.u3]
+    .filter(u => u && u.startsWith('https://static.tokkobroker.com/'));
+
+  if (!urls.length) {
+    return { statusCode: 400, body: 'No URLs válidas' };
+  }
+
+  try {
+    // Navy background
+    const canvas = new Jimp(W, H, 0x12294aff);
+
+    // Fetch and composite up to 4 images
+    await Promise.allSettled(
+      urls.slice(0, 4).map(async (url, i) => {
+        const res = await fetch(url, {
+          headers: { 'User-Agent': 'Mozilla/5.0' },
+        });
+        if (!res.ok) return;
+        const buf = Buffer.from(await res.arrayBuffer());
+        const img = await Jimp.read(buf);
+        img.cover(HW, HH); // crop to slot size (cover fit)
+        canvas.composite(img, SLOTS[i].x, SLOTS[i].y);
+      })
+    );
+
+    // Thin white dividers between slots
+    for (let xx = 0; xx < W; xx++) canvas.setPixelColor(0xffffff22, xx, HH);
+    for (let yy = 0; yy < H; yy++) canvas.setPixelColor(0xffffff22, HW, yy);
+
+    const jpeg = await canvas.getBufferAsync(Jimp.MIME_JPEG);
+
+    return {
+      statusCode: 200,
+      headers: { ...CORS, 'Content-Type': 'image/jpeg' },
+      body: jpeg.toString('base64'),
+      isBase64Encoded: true,
+    };
+  } catch (err) {
+    return {
+      statusCode: 500,
+      headers: CORS,
+      body: err.message,
+    };
+  }
+};
