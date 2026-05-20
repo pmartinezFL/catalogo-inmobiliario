@@ -314,11 +314,18 @@ async function generate() {
   const title = document.getElementById('catalog-title').value.trim()
                   || 'Catálogo de Propiedades';
 
-  // Separar URLs pegadas sin salto de línea: insertar \n antes de cada http
-  const normalized = raw.replace(/(?<!\s)(https?:\/\/)/g, '\n$1');
+  // Separar URLs pegadas: insertar \n antes de http:// o www. que aparezcan pegados
+  const normalized = raw
+    .replace(/(?<=[a-zA-Z0-9])(https?:\/\/)/g, '\n$1')   // ...prophttp:// → salto
+    .replace(/(?<=[a-zA-Z0-9])(www\.)/g,        '\n$1'); // ...propwww.    → salto
   const links = normalized
     .split('\n')
-    .map(l => l.trim())
+    .map(l => {
+      l = l.trim();
+      // Agregar http:// si arranca con www.
+      if (/^www\./i.test(l)) l = 'http://' + l;
+      return l;
+    })
     .filter(l =>
       /^https?:\/\/ficha\.info\/p\/[a-f0-9]+/.test(l) ||
       /^https?:\/\/(www\.)?ferrerlanfranchi\.com\.ar\/p\/\d+/.test(l)
