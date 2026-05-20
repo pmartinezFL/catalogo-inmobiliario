@@ -510,7 +510,12 @@ ${cards}
 const observer = new IntersectionObserver(entries => {
   entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });
 }, { threshold: 0.08 });
-document.querySelectorAll('.card').forEach(c => observer.observe(c));
+document.querySelectorAll('.card').forEach(c => {
+  observer.observe(c);
+  c.addEventListener('touchstart', () => c.classList.add('tap'), { passive: true });
+  c.addEventListener('touchend',   () => setTimeout(() => c.classList.remove('tap'), 320));
+  c.addEventListener('touchcancel',() => c.classList.remove('tap'));
+});
 <\/script>
 </body>
 </html>`;
@@ -602,13 +607,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 /* ── Card ── */
 .card{background:var(--card);border-radius:var(--r);overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.07);transition:box-shadow .25s,transform .25s;opacity:0;transform:translateY(16px)}
 .card.visible{opacity:1;transform:translateY(0);transition:opacity .45s ease,transform .45s ease,box-shadow .25s,transform-origin .25s}
-.card:hover{box-shadow:0 8px 30px rgba(0,0,0,.14);transform:translateY(-4px)}
+.card:hover,.card.tap{box-shadow:0 8px 30px rgba(0,0,0,.14);transform:translateY(-4px)}
 .card-link{display:flex;flex-direction:column;text-decoration:none;color:inherit;height:100%}
 
 /* ── Image ── */
 .img-wrap{position:relative;padding-top:65%;background:var(--border);overflow:hidden;flex-shrink:0}
 .img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .4s ease}
-.card:hover .img{transform:scale(1.05)}
+.card:hover .img,.card.tap .img{transform:scale(1.05)}
 .img-ph{position:absolute;inset:0;background:linear-gradient(135deg,#dce4ef 0%,#c8d4e3 100%)}
 .img-overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(10,20,40,.78) 0%,rgba(10,20,40,.1) 45%,transparent 70%);pointer-events:none}
 
@@ -635,7 +640,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 
 /* ── CTA ── */
 .cta{display:inline-flex;align-items:center;gap:5px;margin-top:auto;padding-top:16px;font-size:13px;font-weight:700;color:var(--navy);transition:gap .2s}
-.card:hover .cta{gap:8px}
+.card:hover .cta,.card.tap .cta{gap:8px}
 
 /* ── Footer ── */
 .ft{border-top:1px solid var(--border);margin-top:8px;padding:20px 24px}
