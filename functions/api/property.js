@@ -93,7 +93,8 @@ function mapCard(data, sourceUrl) {
   const company = prop.company      || {};
 
   const ops        = edited.operations || prop.operations || {};
-  const price      = ops.Sale?.[0] || ops.Rent?.[0] || ops['Temporary Rent']?.[0] || '';
+  const rawPrice   = ops.Sale?.[0] || ops.Rent?.[0] || ops['Temporary Rent']?.[0] || '';
+  const price      = String(rawPrice).replace(/\$+/, '$').trim();
   const priceLabel = ops.Sale ? 'Venta' : ops.Rent ? 'Alquiler' : ops['Temporary Rent'] ? 'Alquiler temporal' : '';
 
   const attrs = {};
