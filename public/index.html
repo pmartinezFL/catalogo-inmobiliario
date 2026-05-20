@@ -476,9 +476,11 @@ function buildCatalog(title, props) {
 <header class="hd">
   <div class="hd-inner">
     <div class="hd-left">
-      ${company.logo
-        ? `<img src="${h(company.logo)}" alt="${h(company.name)}" class="hd-logo">`
-        : `<span class="hd-name">${h(company.name || 'Catálogo')}</span>`}
+      <a href="http://ferrerlanfranchi.com.ar" target="_blank" rel="noopener" style="display:inline-block;">
+        ${company.logo
+          ? `<img src="${h(company.logo)}" alt="${h(company.name)}" class="hd-logo">`
+          : `<span class="hd-name">${h(company.name || 'Catálogo')}</span>`}
+      </a>
     </div>
     <div class="hd-center">
       <h1 class="hd-title">${h(title)}</h1>
@@ -495,8 +497,8 @@ ${cards}
 
 <footer class="ft">
   <div class="ft-inner">
-    <span>${h(company.name || '')}</span>
-    <span>Catálogo generado el ${today}</span>
+    <a href="http://ferrerlanfranchi.com.ar" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;">${h(company.name || '')}</a>
+    <a href="https://share.google/4zqDw8YZpSsFed6KA" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;">Referencias de la firma</a>
   </div>
 </footer>
 
