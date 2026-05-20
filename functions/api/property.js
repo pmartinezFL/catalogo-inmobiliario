@@ -92,23 +92,28 @@ async function resolveToColleagueHtml(inputUrl, env) {
 
 async function getColleagueLink(propertyId, env) {
   const jwt = env.TOKKO_JWT;
-  if (!jwt) throw new Error('TOKKO_JWT no está configurado en el servidor. Actualizalo en Cloudflare → Workers → catalogo-fl → Bindings.');
+  if (!jwt) throw new Error('TOKKO_JWT no está configurado en el servidor. Actualizalo en Cloudflare → Workers → catalogo-fl → Settings → Variables y Secrets.');
 
   const apiUrl =
     `https://www.tokkobroker.com/api3/property/get_ficha_info_url` +
     `?properties_id=${propertyId}&is_edited=False&for_colleague=True&is_for_edit=False`;
 
+  // Tokko acepta tanto "Token" como "Bearer"; probamos Token primero
   const res = await fetch(apiUrl, {
     headers: {
-      Authorization:  `Bearer ${jwt}`,
+      Authorization:  `Token ${jwt}`,
       'Content-Type': 'application/json',
     },
   });
 
-  if (!res.ok) throw new Error(`Tokko respondió con ${res.status}. El JWT puede haber expirado.`);
+  if (!res.ok) {
+    let body = '';
+    try { body = await res.text(); } catch {}
+    throw new Error(`Tokko respondió ${res.status}: ${body.slice(0, 120)}`);
+  }
 
   const data = await res.json();
-  if (!data.ficha_info_url) throw new Error('Tokko no devolvió el link para colegas.');
+  if (!data.ficha_info_url) throw new Error(`Tokko no devolvió ficha_info_url. Respuesta: ${JSON.stringify(data).slice(0, 120)}`);
   return data.ficha_info_url;
 }
 
