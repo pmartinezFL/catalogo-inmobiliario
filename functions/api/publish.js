@@ -45,12 +45,12 @@ export async function onRequest(context) {
 async function shorten(url) {
   try {
     const res = await fetch(
-      `https://is.gd/create.php?format=simple&url=${encodeURIComponent(url)}`,
-      { signal: AbortSignal.timeout(3000) },
+      `https://tinyurl.com/api-create.php?url=${encodeURIComponent(url)}`,
+      { signal: AbortSignal.timeout(4000) },
     );
     if (res.ok) {
       const short = (await res.text()).trim();
-      if (short.startsWith('https://is.gd/')) return short;
+      if (short.startsWith('https://tinyurl.com/')) return short;
     }
   } catch { /* si falla, devolvemos el link largo */ }
   return url;
