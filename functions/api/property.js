@@ -205,6 +205,13 @@ function mapCard(data, sourceUrl) {
     propPics.images_social_media?.[0] ||
     coverImage;
 
+  // Full image list for slideshow (cover first, then the rest, deduped, max 8)
+  const rawImgs = [
+    ...(editPics.images  || []),
+    ...(propPics.images  || []),
+  ].filter(Boolean);
+  const images = [...new Set([coverImage, ...rawImgs].filter(Boolean))].slice(0, 8);
+
   return {
     url:        edited.url || sourceUrl,
     title:      edited.title || prop.address || '',
@@ -212,7 +219,7 @@ function mapCard(data, sourceUrl) {
     location:   prop.location || '',
     type:       prop.type?.name   || '',
     status:     prop.status?.name || '',
-    price, priceLabel, coverImage, coverImageOg,
+    price, priceLabel, coverImage, coverImageOg, images,
     attributes: {
       totalSurface: attrs.total_surface       || '',
       rooms:        attrs.room_amount         || '',
