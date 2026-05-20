@@ -35,8 +35,23 @@ export async function onRequest(context) {
   // Keep catalogs 90 days
   await env.CATALOGS_KV.put(id, html, { expirationTtl: 7_776_000 });
 
-  const origin = new URL(request.url).origin;
-  const url    = `${origin}/c/${id}`;
+  const origin   = new URL(request.url).origin;
+  const longUrl  = `${origin}/c/${id}`;
+  const shortUrl = await shorten(longUrl);
 
-  return new Response(JSON.stringify({ url }), { headers: CORS });
+  return new Response(JSON.stringify({ url: shortUrl }), { headers: CORS });
+}
+
+async function shorten(url) {
+  try {
+    const res = await fetch(
+      `https://is.gd/create.php?format=simple&url=${encodeURIComponent(url)}`,
+      { signal: AbortSignal.timeout(3000) },
+    );
+    if (res.ok) {
+      const short = (await res.text()).trim();
+      if (short.startsWith('https://is.gd/')) return short;
+    }
+  } catch { /* si falla, devolvemos el link largo */ }
+  return url;
 }
