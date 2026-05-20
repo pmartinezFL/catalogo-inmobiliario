@@ -1,4 +1,4 @@
-name = "catalogo-inmobiliario"
+name = "catalogo-fl"
 main = "worker.js"
 compatibility_date = "2025-01-01"
 
