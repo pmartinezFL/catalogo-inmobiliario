@@ -363,7 +363,7 @@ function buildCatalog(title, props) {
   const company  = props.find(p => p.company?.logo)?.company || {};
   const today    = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
   const cards    = props.map(card).join('\n');
-  const ogImage = props[0]?.coverImageOg || props[0]?.coverImage || '';
+  const ogImage = company.logo || props[0]?.coverImageOg || props[0]?.coverImage || '';
   const ogDesc  = `${props.length} propiedad${props.length !== 1 ? 'es' : ''} · ${company.name || 'Catálogo inmobiliario'}`;
 
   return `<!DOCTYPE html>
