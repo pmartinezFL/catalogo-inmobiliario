@@ -38,7 +38,7 @@ export async function onRequest(context) {
     const { html, resolvedUrl } = await resolveToColleagueHtml(inputUrl, env);
     const data = extractPropertyData(html, resolvedUrl);
     return new Response(JSON.stringify(data), {
-      headers: { ...CORS, 'Cache-Control': 'public, max-age=3600' },
+      headers: { ...CORS, 'Cache-Control': 'no-store' },
     });
   } catch (err) {
     return new Response(
