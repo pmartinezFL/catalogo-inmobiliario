@@ -234,6 +234,43 @@ body {
   flex-shrink: 0;
 }
 @keyframes rot { to { transform: rotate(360deg); } }
+
+/* ── Sort block ── */
+.sort-block {
+  border: 1.5px solid var(--g200);
+  border-radius: 7px;
+  padding: 10px 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sort-row {
+  display: grid;
+  grid-template-columns: 20px 1fr 1fr;
+  gap: 5px;
+  align-items: center;
+}
+.sort-priority {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--g400);
+  text-align: center;
+  line-height: 1;
+}
+.sort-row select {
+  border: 1px solid var(--g200);
+  border-radius: 5px;
+  padding: 5px 5px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--g800);
+  background: white;
+  outline: none;
+  cursor: pointer;
+  min-width: 0;
+}
+.sort-row select:focus { border-color: var(--blue); }
+.sort-row select:disabled { color: var(--g400); background: var(--g100); cursor: default; }
 </style>
 </head>
 <body>
@@ -261,6 +298,47 @@ body {
       <textarea id="links"
         placeholder="https://ficha.info/p/abc123&#10;http://www.ferrerlanfranchi.com.ar/p/8065850-prop&#10;https://ficha.info/p/def456"></textarea>
       <small>Un link por línea. Aceptá links de ficha.info o del sitio web.</small>
+    </div>
+
+    <div class="field">
+      <label>Ordenar propiedades</label>
+      <div class="sort-block" id="sort-block">
+
+        <div class="sort-row">
+          <span class="sort-priority">1°</span>
+          <select class="sort-key" onchange="updateSortDir(this)">
+            <option value="">— sin criterio —</option>
+            <option value="type">Tipo</option>
+            <option value="location">Ubicación</option>
+            <option value="price">Precio</option>
+          </select>
+          <select class="sort-dir" disabled><option value="asc">—</option></select>
+        </div>
+
+        <div class="sort-row">
+          <span class="sort-priority">2°</span>
+          <select class="sort-key" onchange="updateSortDir(this)">
+            <option value="">— sin criterio —</option>
+            <option value="type">Tipo</option>
+            <option value="location">Ubicación</option>
+            <option value="price">Precio</option>
+          </select>
+          <select class="sort-dir" disabled><option value="asc">—</option></select>
+        </div>
+
+        <div class="sort-row">
+          <span class="sort-priority">3°</span>
+          <select class="sort-key" onchange="updateSortDir(this)">
+            <option value="">— sin criterio —</option>
+            <option value="type">Tipo</option>
+            <option value="location">Ubicación</option>
+            <option value="price">Precio</option>
+          </select>
+          <select class="sort-dir" disabled><option value="asc">—</option></select>
+        </div>
+
+      </div>
+      <small>Combiná hasta 3 criterios por orden de prioridad.</small>
     </div>
 
     <button class="btn-primary" id="gen-btn" onclick="generate()">
@@ -370,9 +448,10 @@ async function generate() {
     return;
   }
 
-  // Build & show
+  // Build & show (aplicar ordenamiento si corresponde)
   lastProps = props;
-  generatedHTML = buildCatalog(title, props);
+  const sortedProps = sortProps(props, getSortConfig());
+  generatedHTML = buildCatalog(title, sortedProps);
 
   const frame = document.getElementById('preview-frame');
   frame.srcdoc = generatedHTML;
@@ -424,6 +503,71 @@ function copyUrl(url, btn) {
   navigator.clipboard.writeText(url).then(() => {
     btn.textContent = '✔ Copiado!';
     setTimeout(() => { btn.textContent = '📋 Copiar link'; }, 2000);
+  });
+}
+
+// ─── Ordenamiento ────────────────────────────────────────────
+
+function updateSortDir(keySelect) {
+  const dirSel = keySelect.closest('.sort-row').querySelector('.sort-dir');
+  const key = keySelect.value;
+  if (!key) {
+    dirSel.disabled = true;
+    dirSel.innerHTML = '<option value="asc">—</option>';
+    return;
+  }
+  dirSel.disabled = false;
+  const prev = dirSel.value;
+  if (key === 'price') {
+    dirSel.innerHTML =
+      `<option value="asc"${prev === 'asc' ? ' selected' : ''}>↑ menor → mayor</option>` +
+      `<option value="desc"${prev === 'desc' ? ' selected' : ''}>↓ mayor → menor</option>`;
+  } else {
+    dirSel.innerHTML =
+      `<option value="asc"${prev === 'asc' ? ' selected' : ''}>A → Z</option>` +
+      `<option value="desc"${prev === 'desc' ? ' selected' : ''}>Z → A</option>`;
+  }
+}
+
+function getSortConfig() {
+  return [...document.querySelectorAll('#sort-block .sort-row')]
+    .map(row => ({
+      key: row.querySelector('.sort-key').value,
+      dir: row.querySelector('.sort-dir').value || 'asc',
+    }))
+    .filter(c => c.key);
+}
+
+function parsePriceVal(priceStr) {
+  if (!priceStr) return null;
+  // "USD 150.000" / "ARS 5.000.000" → quitar no-dígitos → parsear
+  const n = parseInt(priceStr.replace(/[^0-9]/g, ''), 10);
+  return isNaN(n) ? null : n;
+}
+
+function sortProps(props, config) {
+  if (!config.length) return props;
+  return [...props].sort((a, b) => {
+    for (const { key, dir } of config) {
+      let cmp = 0;
+      if (key === 'price') {
+        const va = parsePriceVal(a.price);
+        const vb = parsePriceVal(b.price);
+        // Sin precio siempre al final, independientemente del sentido
+        if (va === null && vb === null) continue;
+        if (va === null) return 1;
+        if (vb === null) return -1;
+        cmp = dir === 'asc' ? va - vb : vb - va;
+      } else if (key === 'type') {
+        cmp = (a.type || '').localeCompare(b.type || '', 'es');
+        if (dir === 'desc') cmp = -cmp;
+      } else if (key === 'location') {
+        cmp = (a.location || '').localeCompare(b.location || '', 'es');
+        if (dir === 'desc') cmp = -cmp;
+      }
+      if (cmp !== 0) return cmp;
+    }
+    return 0;
   });
 }
 
