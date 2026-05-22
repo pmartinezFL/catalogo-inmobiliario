@@ -592,11 +592,12 @@ function slug(str) {
 // ─── Catalog builder ─────────────────────────────────────────
 
 function buildCatalog(title, props) {
-  // Preferir siempre el logo/nombre de nuestra inmobiliaria (propiedades _own)
-  // Si el catálogo incluye fichas de colegas, el header igual muestra nuestro branding
-  const company  = props.find(p => p._own && p.company?.logo)?.company
-                || props.find(p => p.company?.logo)?.company
-                || {};
+  // Header siempre con branding de FL — incluso si todas las fichas son de colegas
+  const FL_COMPANY = {
+    name: 'Ferrer Lanfranchi | Inmuebles',
+    logo: 'https://static.tokkobroker.com/branch_logos/92991/2a7f1cde-77fb-4d54-b745-170e19aa27fe-logo_de_tu_inmobiliaria-Logo-redes-1.png',
+  };
+  const company  = props.find(p => p._own && p.company?.logo)?.company || FL_COMPANY;
   const today    = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
   const cards    = props.map(card).join('\n');
   // Logo en fondo navy 1200x630 → WhatsApp muestra preview pequeña y prolija
