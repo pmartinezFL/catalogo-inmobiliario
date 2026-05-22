@@ -91,25 +91,29 @@ async function resolveToColleagueHtml(inputUrl, env) {
 // ─── Tokko API ───────────────────────────────────────────────────────────────
 
 async function getColleagueLink(propertyId, env) {
-  const jwt = env.TOKKO_JWT;
-  if (!jwt) throw new Error('TOKKO_JWT no está configurado en el servidor. Actualizalo en Cloudflare → Workers → catalogo-fl → Settings → Variables y Secrets.');
+  const key = env.TOKKO_JWT;
+  if (!key) throw new Error('TOKKO_JWT no está configurado en el servidor. Actualizalo en Cloudflare → Workers → catalogo-fl → Settings → Variables y Secrets.');
 
-  const apiUrl =
-    `https://www.tokkobroker.com/api3/property/get_ficha_info_url` +
-    `?properties_id=${propertyId}&is_edited=False&for_colleague=True&is_for_edit=False`;
+  // La API key permanente de Tokko va como parámetro ?key= en la URL
+  // (distinto al JWT de sesión que usaba Authorization header + cookie)
+  const isApiKey = !key.includes('.');   // los JWT tienen 3 partes separadas por "."
+  const apiUrl = isApiKey
+    ? `https://www.tokkobroker.com/api3/property/get_ficha_info_url` +
+      `?key=${encodeURIComponent(key)}&properties_id=${propertyId}&is_edited=False&for_colleague=True&is_for_edit=False`
+    : `https://www.tokkobroker.com/api3/property/get_ficha_info_url` +
+      `?properties_id=${propertyId}&is_edited=False&for_colleague=True&is_for_edit=False`;
 
-  // Tokko valida JWT + cookie sessionid (session_id está embebido en el JWT)
-  const sessionId = extractJwtClaim(jwt, 'session_id');
+  const sessionId = isApiKey ? '' : extractJwtClaim(key, 'session_id');
   const cookieHdr = sessionId ? `sessionid=${sessionId}` : '';
 
   const res = await fetch(apiUrl, {
     headers: {
-      Authorization:  jwt,
       'Content-Type': 'application/json',
       Origin:         'https://app.tokkobroker.com',
       Referer:        'https://app.tokkobroker.com/',
       'User-Agent':   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Safari/605.1.15',
-      ...(cookieHdr ? { Cookie: cookieHdr } : {}),
+      ...(!isApiKey ? { Authorization: key } : {}),
+      ...(cookieHdr  ? { Cookie: cookieHdr } : {}),
     },
   });
 
