@@ -384,15 +384,15 @@ async function generate() {
   const title = document.getElementById('catalog-title').value.trim()
                   || 'Catálogo de Propiedades';
 
-  // Separar URLs pegadas: insertar \n antes de http:// o www. que aparezcan pegados
+  // Separar URLs: manejar tanto links pegados como separados por espacios
   const normalized = raw
-    .replace(/(?<=[a-zA-Z0-9])(https?:\/\/)/g, '\n$1')   // ...prophttp:// → salto
-    .replace(/(?<=[a-zA-Z0-9])(www\.)/g,        '\n$1'); // ...propwww.    → salto
-  const links = normalized
+    .replace(/[ \t]*(https?:\/\/)/g,              '\n$1') // espacio/tab antes de http(s):// → salto
+    .replace(/(?<=[a-zA-Z0-9])(https?:\/\/)/g,   '\n$1') // pegados sin separador → salto
+    .replace(/(?<=[a-zA-Z0-9])(www\.)/g,          '\n$1'); // pegados con www. → salto
+  const allLinks = normalized
     .split('\n')
     .map(l => {
       l = l.trim();
-      // Agregar http:// si arranca con www.
       if (/^www\./i.test(l)) l = 'http://' + l;
       return l;
     })
@@ -400,6 +400,14 @@ async function generate() {
       /^https?:\/\/ficha\.info\/p\/[a-f0-9]+/.test(l) ||
       /^https?:\/\/(www\.)?ferrerlanfranchi\.com\.ar\/p\/\d+/.test(l)
     );
+  // Deduplicar: mismo link con distinto ?v= o parámetros → una sola ficha
+  const seen = new Set();
+  const links = allLinks.filter(l => {
+    const base = l.split('?')[0];
+    if (seen.has(base)) return false;
+    seen.add(base);
+    return true;
+  });
 
   if (!links.length) {
     setStatus('Pegá al menos un link válido (ficha.info o sitio web de la propiedad).', 'error');
@@ -584,7 +592,11 @@ function slug(str) {
 // ─── Catalog builder ─────────────────────────────────────────
 
 function buildCatalog(title, props) {
-  const company  = props.find(p => p.company?.logo)?.company || {};
+  // Preferir siempre el logo/nombre de nuestra inmobiliaria (propiedades _own)
+  // Si el catálogo incluye fichas de colegas, el header igual muestra nuestro branding
+  const company  = props.find(p => p._own && p.company?.logo)?.company
+                || props.find(p => p.company?.logo)?.company
+                || {};
   const today    = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
   const cards    = props.map(card).join('\n');
   // Logo en fondo navy 1200x630 → WhatsApp muestra preview pequeña y prolija

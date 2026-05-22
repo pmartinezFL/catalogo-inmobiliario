@@ -142,6 +142,7 @@ function mapV1Card(d, sourceUrl) {
     attributes:  { totalSurface: surf, rooms, bedrooms: beds, bathrooms: baths, parking: park },
     company:     { name: branch.display_name || branch.name || '', logo: branch.logo || '' },
     agent:       { name: producer.name || '', phone: producer.cellphone || producer.phone || '', email: producer.email || '' },
+    _own: true,   // propiedad propia (Tokko v1) → usar nuestro logo en el catálogo
   };
 }
 
@@ -237,6 +238,7 @@ function mapCard(data, sourceUrl) {
       parking:      attrs.parking_lot_amount  || '',
     },
     company: { name: company.name || '', logo: company.logo || data.company_logo || '' },
+    _own: false,  // ficha de colega (scraping) → no usar este logo en el header
     agent:   {
       name:  data.user?.name || '',
       phone: data.user?.cellphone || data.user?.phone || '',
