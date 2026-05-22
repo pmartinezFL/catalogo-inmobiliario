@@ -269,14 +269,6 @@ body {
 
     <div id="status"></div>
 
-    <button class="btn-secondary hidden" id="dl-btn">
-      ⬇ Descargar HTML
-    </button>
-
-    <button class="btn-publish hidden" id="pub-btn" onclick="publish()">
-      🚀 Publicar y copiar link
-    </button>
-
     <div id="pub-status" class="hidden pub-result"></div>
 
   </aside>
@@ -340,8 +332,6 @@ async function generate() {
   const btn = document.getElementById('gen-btn');
   btn.disabled = true;
   btn.innerHTML = '<span class="spin"></span> Generando…';
-  document.getElementById('dl-btn').classList.add('hidden');
-  document.getElementById('pub-btn').classList.add('hidden');
   document.getElementById('pub-status').classList.add('hidden');
   document.getElementById('preview-frame').classList.add('hidden');
   document.getElementById('empty-state').classList.remove('hidden');
@@ -394,39 +384,15 @@ async function generate() {
   counter.classList.remove('hidden');
   counter.textContent = `${props.length} propiedad${props.length !== 1 ? 'es' : ''}${errCount ? ` · ${errCount} error${errCount > 1 ? 'es' : ''}` : ''}`;
 
-  const dlBtn = document.getElementById('dl-btn');
-  dlBtn.classList.remove('hidden');
-  dlBtn.textContent = '⬇ Descargar HTML';
-  dlBtn.onclick = () => download(title);
+  const partialMsg = errCount
+    ? `${props.length} propiedades OK, ${errCount} link${errCount > 1 ? 's' : ''} con error. Publicando…`
+    : `${props.length} propiedad${props.length !== 1 ? 'es' : ''} generada${props.length !== 1 ? 's' : ''}. Publicando…`;
+  setStatus(partialMsg, 'success');
 
-  document.getElementById('pub-btn').classList.remove('hidden');
-
-  const msg = errCount
-    ? `Listo. ${props.length} propiedades OK, ${errCount} link${errCount > 1 ? 's' : ''} con error.`
-    : `Listo. ${props.length} propiedad${props.length !== 1 ? 'es' : ''} generada${props.length !== 1 ? 's' : ''}.`;
-  setStatus(msg, 'success');
-}
-
-function download(title) {
-  const blob = new Blob([generatedHTML], { type: 'text/html;charset=utf-8' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  a.download = `catalogo-${slug(title)}.html`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-async function publish() {
-  const title  = document.getElementById('catalog-title').value.trim() || 'Catálogo de Propiedades';
-  const pubBtn = document.getElementById('pub-btn');
+  // Auto-publish
   const pubDiv = document.getElementById('pub-status');
-
-  pubBtn.disabled = true;
-  pubBtn.innerHTML = '<span class="spin"></span> Publicando…';
-  pubDiv.className = 'pub-result hidden';
-  pubDiv.textContent = '';
-
+  pubDiv.className = 'pub-result';
+  pubDiv.innerHTML = '<span class="spin"></span> Publicando…';
   try {
     const res  = await fetch('/api/publish', {
       method:  'POST',
@@ -434,22 +400,24 @@ async function publish() {
       body:    JSON.stringify({ html: generatedHTML, title }),
     });
     const data = await res.json();
-
     if (data.url) {
-      pubDiv.className   = 'pub-result';
-      pubDiv.innerHTML   = `✅ Publicado: <a href="${data.url}" target="_blank">${data.url}</a><br>
+      pubDiv.className = 'pub-result';
+      pubDiv.innerHTML = `✅ Catálogo publicado: <a href="${data.url}" target="_blank">${data.url}</a><br>
         <button onclick="copyUrl('${data.url}', this)" style="margin-top:7px;padding:4px 10px;font-size:12px;cursor:pointer;border:1px solid #059669;background:white;border-radius:5px;color:#059669;font-weight:700;">📋 Copiar link</button>`;
+      const finalMsg = errCount
+        ? `Listo. ${props.length} propiedades OK, ${errCount} error${errCount > 1 ? 'es' : ''}.`
+        : `Listo. ${props.length} propiedad${props.length !== 1 ? 'es' : ''}.`;
+      setStatus(finalMsg, 'success');
     } else {
-      pubDiv.className   = 'pub-result error';
-      pubDiv.textContent = `Error: ${data.error || 'No se pudo publicar.'}`;
+      pubDiv.className = 'pub-result error';
+      pubDiv.textContent = `No se pudo publicar: ${data.error || 'error desconocido'}`;
+      setStatus('Catálogo generado, pero no se pudo publicar.', 'error');
     }
   } catch (e) {
-    pubDiv.className   = 'pub-result error';
-    pubDiv.textContent = `Error de red: ${e.message}`;
+    pubDiv.className = 'pub-result error';
+    pubDiv.textContent = `Error de red al publicar: ${e.message}`;
+    setStatus('Catálogo generado, pero no se pudo publicar.', 'error');
   }
-
-  pubBtn.disabled = false;
-  pubBtn.innerHTML = '🚀 Publicar y copiar link';
 }
 
 function copyUrl(url, btn) {
