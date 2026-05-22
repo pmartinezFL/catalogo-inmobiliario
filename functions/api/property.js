@@ -10,12 +10,9 @@ const FETCH_HEADERS = {
   'Accept-Language': 'es-AR,es;q=0.9',
 };
 
-// ─── Accepted URL patterns ───────────────────────────────────────────────────
-// 1. http(s)://www.ferrerlanfranchi.com.ar/p/DIGITS(-anything)?
-// 2. https://ficha.info/p/HEX (para-colegas OR regular — both accepted)
 function isValidInput(url) {
   return /^https?:\/\/(www\.)?ferrerlanfranchi\.com\.ar\/p\/\d+/.test(url) ||
-         /^https?:\/\/ficha\.info\/p\/[a-f0-9]+/.test(url);
+         /^https?:\/\/ficha\.info\/p\/[a-zA-Z0-9]+/.test(url);
 }
 
 export async function onRequest(context) {
@@ -35,8 +32,7 @@ export async function onRequest(context) {
   }
 
   try {
-    const { html, resolvedUrl } = await resolveToColleagueHtml(inputUrl, env);
-    const data = extractPropertyData(html, resolvedUrl);
+    const data = await fetchPropertyData(inputUrl, env);
     return new Response(JSON.stringify(data), {
       headers: { ...CORS, 'Cache-Control': 'no-store' },
     });
@@ -48,135 +44,112 @@ export async function onRequest(context) {
   }
 }
 
-// ─── URL resolution ──────────────────────────────────────────────────────────
+// ─── Router principal ────────────────────────────────────────────────────────
 
-/**
- * Always returns the HTML of the "para colegas" ficha.info page.
- * Three input cases:
- *   A) ferrerlanfranchi.com.ar/p/ID  → get colleague link from Tokko, fetch it
- *   B) ficha.info/p/HASH (non-colegas, redirects to website) → extract ID, Tokko, fetch
- *   C) ficha.info/p/HASH (para colegas, stays on ficha.info) → use directly
- */
-async function resolveToColleagueHtml(inputUrl, env) {
-  // ── Case A: website URL ───────────────────────────────────────────────────
+async function fetchPropertyData(inputUrl, env) {
+  const apiKey = env.TOKKO_JWT;
+  if (!apiKey) throw new Error('TOKKO_JWT no está configurado. Actualizalo en Cloudflare → Workers → catalogo-fl → Settings → Variables y Secrets.');
+
+  let propertyId = null;
+
   if (inputUrl.includes('ferrerlanfranchi.com.ar')) {
-    const id = inputUrl.match(/\/p\/(\d+)/)?.[1];
-    if (!id) throw new Error('No se pudo extraer el ID de propiedad de la URL.');
-    const fichaUrl = await getColleagueLink(id, env);
-    const res = await fetch(fichaUrl, { headers: FETCH_HEADERS });
-    if (!res.ok) throw new Error(`ficha.info respondió con ${res.status}`);
-    return { html: await res.text(), resolvedUrl: fichaUrl };
+    // Caso A: URL del sitio web → extraer ID directamente
+    propertyId = inputUrl.match(/\/p\/(\d+)/)?.[1];
+  } else {
+    // Caso B/C: URL de ficha.info → seguir redirecciones
+    const res = await fetch(inputUrl, { headers: FETCH_HEADERS, redirect: 'follow' });
+    if (!res.ok) throw new Error(`La URL respondió con ${res.status}`);
+    const finalUrl = res.url;
+
+    if (finalUrl.includes('ferrerlanfranchi.com.ar')) {
+      // Redirigió al sitio web → extraer ID
+      propertyId = finalUrl.match(/\/p\/(\d+)/)?.[1];
+    } else {
+      // Se quedó en ficha.info (link para colegas) → scrape HTML
+      const html = await res.text();
+      return extractPropertyData(html, finalUrl);
+    }
   }
 
-  // ── Cases B & C: ficha.info URL ────────────────────────────────────────────
-  const res = await fetch(inputUrl, { headers: FETCH_HEADERS, redirect: 'follow' });
-  if (!res.ok) throw new Error(`La URL respondió con ${res.status}`);
+  if (!propertyId) throw new Error('No se pudo extraer el ID de propiedad de la URL.');
 
-  const finalUrl = res.url;
-
-  // Case B: ficha.info redirected us to the website → need Tokko lookup
-  if (!finalUrl.includes('ficha.info')) {
-    const id = finalUrl.match(/\/p\/(\d+)/)?.[1];
-    if (!id) throw new Error('No se pudo extraer el ID de propiedad tras la redirección.');
-    const fichaUrl = await getColleagueLink(id, env);
-    const res2 = await fetch(fichaUrl, { headers: FETCH_HEADERS });
-    if (!res2.ok) throw new Error(`ficha.info respondió con ${res2.status}`);
-    return { html: await res2.text(), resolvedUrl: fichaUrl };
-  }
-
-  // Case C: already on ficha.info (para colegas) → use as-is
-  return { html: await res.text(), resolvedUrl: finalUrl };
+  return await fetchFromTokkoV1(propertyId, apiKey, inputUrl);
 }
 
-// ─── Tokko API ───────────────────────────────────────────────────────────────
+// ─── Tokko API v1 (API key permanente, no requiere sesión) ───────────────────
 
-async function getColleagueLink(propertyId, env) {
-  const key = env.TOKKO_JWT;
-  if (!key) throw new Error('TOKKO_JWT no está configurado en el servidor. Actualizalo en Cloudflare → Workers → catalogo-fl → Settings → Variables y Secrets.');
+async function fetchFromTokkoV1(propertyId, apiKey, sourceUrl) {
+  const url = `https://www.tokkobroker.com/api/v1/property/${propertyId}/?format=json&key=${encodeURIComponent(apiKey)}&lang=es_ar`;
 
-  // La API key permanente de Tokko va como parámetro ?key= en la URL
-  // (distinto al JWT de sesión que usaba Authorization header + cookie)
-  const isApiKey = !key.includes('.');   // los JWT tienen 3 partes separadas por "."
-  const apiUrl = isApiKey
-    ? `https://www.tokkobroker.com/api3/property/get_ficha_info_url` +
-      `?key=${encodeURIComponent(key)}&properties_id=${propertyId}&is_edited=False&for_colleague=True&is_for_edit=False`
-    : `https://www.tokkobroker.com/api3/property/get_ficha_info_url` +
-      `?properties_id=${propertyId}&is_edited=False&for_colleague=True&is_for_edit=False`;
-
-  const sessionId = isApiKey ? '' : extractJwtClaim(key, 'session_id');
-  const cookieHdr = sessionId ? `sessionid=${sessionId}` : '';
-
-  const res = await fetch(apiUrl, {
-    headers: {
-      'Content-Type': 'application/json',
-      Origin:         'https://app.tokkobroker.com',
-      Referer:        'https://app.tokkobroker.com/',
-      'User-Agent':   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Safari/605.1.15',
-      ...(!isApiKey ? { Authorization: key } : {}),
-      ...(cookieHdr  ? { Cookie: cookieHdr } : {}),
-    },
-  });
-
+  const res = await fetch(url);
   if (!res.ok) {
-    let body = '';
-    try { body = await res.text(); } catch {}
-    throw new Error(`Tokko respondió ${res.status}: ${body.slice(0, 200)}`);
+    const body = await res.text().catch(() => '');
+    throw new Error(`Tokko API respondió ${res.status}: ${body.slice(0, 200)}`);
   }
 
   const data = await res.json();
-  if (!data.ficha_info_url) throw new Error(`Tokko no devolvió ficha_info_url. Respuesta: ${JSON.stringify(data).slice(0, 200)}`);
-  return data.ficha_info_url;
+  if (data.detail) throw new Error(`Tokko API: ${data.detail}`);
+
+  return mapV1Card(data, sourceUrl);
 }
 
-// ─── Image helpers ──────────────────────────────────────────────────────────
+function mapV1Card(d, sourceUrl) {
+  // Precio
+  const op       = (d.operations || [])[0] || {};
+  const priceObj = (op.prices || [])[0] || {};
+  const currency = priceObj.currency || '';
+  const amount   = priceObj.price || 0;
+  const price    = amount
+    ? `${currency} ${Number(amount).toLocaleString('es-AR')}`
+    : '';
+  const priceLabel = op.operation_type || '';
 
-/**
- * Escanea el JSON serializado buscando URLs de imágenes de Tokko.
- * Filtra thumbnails (contienen "thumbnail" en la URL) y limita a 8.
- * La coverImage va siempre primero.
- */
-function extractTokkoImageUrls(jsonStr, coverImage) {
-  const seen  = new Set();
-  const imgs  = [];
-  // Captura URLs de static.tokkobroker.com/pictures/... (jpg/jpeg/png/webp/gif)
-  const rx = /https:\/\/static\.tokkobroker\.com\/(?:pictures|fotos)\/[^"\\]+\.(?:jpe?g|png|webp|gif)/gi;
-  let m;
-  while ((m = rx.exec(jsonStr)) !== null) {
-    const url = m[0];
-    // Excluir thumbnails y social_media (suelen tener dimensiones en la URL o "thumbnail" en el path)
-    if (/thumbnail|_thumb|\/sm\/|social_media/i.test(url)) continue;
-    if (!seen.has(url)) { seen.add(url); imgs.push(url); }
-  }
-  // Asegurar que la portada va primero
-  if (coverImage && !seen.has(coverImage)) imgs.unshift(coverImage);
-  else if (coverImage && imgs[0] !== coverImage) {
-    const idx = imgs.indexOf(coverImage);
-    if (idx > 0) imgs.splice(idx, 1);
-    imgs.unshift(coverImage);
-  }
-  return imgs.slice(0, 8);
+  // Fotos — portada primero, luego las demás, máx 8
+  const sortedPhotos = (d.photos || []).slice().sort((a, b) =>
+    (b.is_front_cover ? 1 : 0) - (a.is_front_cover ? 1 : 0)
+  );
+  const images     = sortedPhotos.map(p => p.image).filter(Boolean).slice(0, 8);
+  const coverImage = images[0] || '';
+  const coverImageOg =
+    sortedPhotos.find(p => p.is_front_cover)?.social_media_url || coverImage;
+
+  // Ubicación: "Valle del Golf | Malagueño | Santa Maria" → invertir para mostrar ciudad primero
+  const locParts = (d.location?.short_location || '').split(' | ').filter(Boolean);
+  const location = locParts.reverse().join(' | ');
+
+  // Estado
+  const statusMap = { 2: '', 3: 'Reservado', 4: 'Vendido', 5: 'Pausado', 6: 'Alquilado' };
+  const status = statusMap[d.status] || '';
+
+  // Atributos
+  const surf   = d.total_surface    ? `${parseFloat(d.total_surface).toLocaleString('es-AR')} m2 construido` : '';
+  const rooms  = d.room_amount      ? `${d.room_amount} ambiente${d.room_amount !== 1 ? 's' : ''}`            : '';
+  const beds   = d.suite_amount     ? `${d.suite_amount} dormitorio${d.suite_amount !== 1 ? 's' : ''}`        : '';
+  const baths  = d.bathroom_amount  ? `${d.bathroom_amount} baño${d.bathroom_amount !== 1 ? 's' : ''}`        : '';
+  const park   = d.parking_lot_amount ? `${d.parking_lot_amount} cochera${d.parking_lot_amount !== 1 ? 's' : ''}` : '';
+
+  const branch   = d.branch   || {};
+  const producer = d.producer || {};
+
+  return {
+    url:         d.public_url || sourceUrl,
+    title:       d.publication_title || d.address || d.fake_address || '',
+    address:     d.address || d.fake_address || '',
+    location,
+    type:        d.type?.name || '',
+    status,
+    price, priceLabel, coverImage, coverImageOg, images,
+    attributes:  { totalSurface: surf, rooms, bedrooms: beds, bathrooms: baths, parking: park },
+    company:     { name: branch.display_name || branch.name || '', logo: branch.logo || '' },
+    agent:       { name: producer.name || '', phone: producer.cellphone || producer.phone || '', email: producer.email || '' },
+  };
 }
 
-// ─── JWT helpers ────────────────────────────────────────────────────────────
-
-function extractJwtClaim(jwt, claim) {
-  try {
-    const payload = jwt.split('.')[1];
-    // base64url → base64 → JSON
-    const b64 = payload.replace(/-/g, '+').replace(/_/g, '/');
-    const json = JSON.parse(atob(b64));
-    return json[claim] || '';
-  } catch {
-    return '';
-  }
-}
-
-// ─── Parsing ────────────────────────────────────────────────────────────────
+// ─── Scraping ficha.info (fallback para links "para colegas") ────────────────
 
 function extractPropertyData(html, sourceUrl) {
   const pushRx = /self\.__next_f\.push\(\[1,"((?:[^"\\]|\\.)*)"\]\)/g;
   let m;
-
   while ((m = pushRx.exec(html)) !== null) {
     try {
       const content = JSON.parse(`"${m[1]}"`);
@@ -187,11 +160,8 @@ function extractPropertyData(html, sourceUrl) {
       const jsonStr = extractObject(content, idx + dataKey.length);
       if (!jsonStr) continue;
       return mapCard(JSON.parse(jsonStr), sourceUrl);
-    } catch {
-      // try next chunk
-    }
+    } catch { /* intentar siguiente chunk */ }
   }
-
   return metaFallback(html, sourceUrl);
 }
 
@@ -217,7 +187,6 @@ function mapCard(data, sourceUrl) {
   const prop    = data.property     || {};
   const edited  = data.edited_ficha || {};
   const company = prop.company      || {};
-
   const ops        = edited.operations || prop.operations || {};
   const rawPrice   = ops.Sale?.[0] || ops.Rent?.[0] || ops['Temporary Rent']?.[0] || '';
   const price      = String(rawPrice).replace(/\$+/, '$').trim();
@@ -226,12 +195,10 @@ function mapCard(data, sourceUrl) {
   const attrs = {};
   for (const a of prop.attributes_list || []) attrs[a.attr] = a.value;
 
-  const propPics = prop.pictures  || {};
-  const editPics = edited.pictures || {};
-
-  // Tokko puede devolver imágenes como strings o como objetos {url:"..."}
   const toUrl = (x) => !x ? '' : typeof x === 'string' ? x : (x.url || x.src || '');
 
+  const propPics = prop.pictures  || {};
+  const editPics = edited.pictures || {};
   const coverImage =
     toUrl(editPics.front_cover_image?.url || editPics.front_cover_image) ||
     toUrl(propPics.front_cover_image?.url || propPics.front_cover_image) ||
@@ -242,8 +209,6 @@ function mapCard(data, sourceUrl) {
     toUrl((propPics.images_social_media || [])[0]) ||
     coverImage;
 
-  // Full image list for slideshow
-  // 1) Intentamos los campos conocidos
   const rawImgs = [
     ...(editPics.images || []),
     ...(propPics.images || []),
@@ -251,11 +216,8 @@ function mapCard(data, sourceUrl) {
 
   let images;
   if (rawImgs.length > 1) {
-    // Ya tenemos suficientes por el camino normal
     images = [...new Set([coverImage, ...rawImgs].filter(Boolean))].slice(0, 8);
   } else {
-    // 2) Fallback: escanear todo el JSON buscando URLs de imágenes de Tokko
-    //    (cubre estructuras no estándar: picture_set, media, etc.)
     images = extractTokkoImageUrls(JSON.stringify(data), coverImage);
   }
 
@@ -283,6 +245,25 @@ function mapCard(data, sourceUrl) {
   };
 }
 
+function extractTokkoImageUrls(jsonStr, coverImage) {
+  const seen = new Set();
+  const imgs = [];
+  const rx = /https:\/\/static\.tokkobroker\.com\/(?:pictures|fotos)\/[^"\\]+\.(?:jpe?g|png|webp|gif)/gi;
+  let m;
+  while ((m = rx.exec(jsonStr)) !== null) {
+    const url = m[0];
+    if (/thumbnail|_thumb|\/sm\/|social_media/i.test(url)) continue;
+    if (!seen.has(url)) { seen.add(url); imgs.push(url); }
+  }
+  if (coverImage && !seen.has(coverImage)) imgs.unshift(coverImage);
+  else if (coverImage && imgs[0] !== coverImage) {
+    const idx = imgs.indexOf(coverImage);
+    if (idx > 0) imgs.splice(idx, 1);
+    imgs.unshift(coverImage);
+  }
+  return imgs.slice(0, 8);
+}
+
 function metaFallback(html, sourceUrl) {
   const g = (rx) => html.match(rx)?.[1] || '';
   return {
@@ -291,6 +272,7 @@ function metaFallback(html, sourceUrl) {
     address:  g(/<title[^>]*>([^<]+)/i),
     location: '', type: '', status: '', price: '', priceLabel: '',
     coverImage: g(/property="og:image" content="([^"]+)"/),
+    images: [],
     attributes: {},
     company: { name: '', logo: '' },
     agent:   { name: '', phone: '', email: '' },
